@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from scipy.special import comb
 import math
 import itertools
 from functools import reduce
@@ -68,12 +69,95 @@ cv2.circle(img, toCV(rootNode), 8, (1, 0, 1), -1)
 
 
 
+img = np.ones((HEIGHT, WIDTH, 3))
+LC = Vec(WIDTH//2, HEIGHT//2)
+
+L1 = Vec(WIDTH//2, HEIGHT//4)
+L2 = Vec(3*WIDTH//4, HEIGHT//4)
+L3 = Vec(WIDTH//3, 3*HEIGHT//4)
+L4 = Vec(2*WIDTH//3, 3*HEIGHT//4)
+LC2= Vec(1*WIDTH//4, 2*HEIGHT//4)
+E1 = (LC, L1)
+E2 = (LC, L2)
+E3 = (LC, L3)
+E4 = (LC, L4)
+E5 = (LC2,L1)
+E6 = (LC2,L3)
+leafs = [LC, L1, L2, L3, L4, LC2]
+edges = [E1, E2, E3, E4, E5, E6]
+
+def getPointsFromEdge(edge):
+	V, W = edge
+	center = (V+W) * 0.5
+	p1 = (mm(5)*(V-W)*(1/(V-W).norm())).rotate(0.5*math.pi) + center
+	p2 = (mm(5)*(W-V)*(1/(W-V).norm())).rotate(0.5*math.pi) + center
+	return p1, p2
+
+def getPointsFromNode(edges, P):
+	neighbours = [otherCorner(edge, P) for edge in edges if P in edge] + [P]
+	triangulation = bowyerWatson(neighbours)
+	
+	points = []
+	for T in triangulation:
+		# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
+		V, W = [c for c in T.corners if c != P]
+		a, b, c = (V-W).norm(), (P-V).norm(), (P-W).norm()
+		angle = math.acos((b**2 + c**2 - a**2) / (2 * b * c))
+		Q = (V-P).rotate(angle/2)
+		Q = P + 1/Q.norm() * Q * mm(5)
+		points.append(Q)
+	return points
+
+for leaf in leafs:
+	cv2.circle(img, toCV(leaf), R, (0.5, 1, 0), mm(2))
+for V, W in edges:
+	cv2.line(img, toCV(V), toCV(W), (1, 0.5, 0), mm(2))
+
+for edge in edges:
+	p1, p2 = getPointsFromEdge(edge)
+	cv2.circle(img, toCV(p1), 4, (0.5, 0.5, 1), -1)
+	cv2.circle(img, toCV(p2), 4, (0.5, 0.5, 1), -1)
+
+for P in [LC, LC2]:
+	points = getPointsFromNode(edges, P)
+	for Q in points:
+		cv2.circle(img, toCV(Q), 4, (0.5, 0.5, 1), -1)
+
+cv2.imshow("img", img)
+cv2.waitKey()
+exit()
+
+
+perms = list(itertools.combinations(neighbourNodes, 2))
+print(len(perms))
+for V, W in perms:
+	angle = (V-LC).angleWith(W-LC) * (180 / math.pi)
+	C = (V + W) * 0.5
+	print(angle)
+	cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 1)
+	cv2.putText(img, "%0.2f" % angle, toCV(C), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0)
+
+# T = Triangle(L1, LC, L3)
+# drawTriangle(img, T)
+# px = (mm(5)*(T.C-LC)*(1/(T.C-LC).norm())) + LC
+# cv2.circle(img, toCV(px), 4, (0.5, 0.5, 1), -1)
+# cv2.line(img, toCV(LC), toCV(T.C), (0, 0.5, 1), 1)
+
+cv2.imshow("img", img)
+cv2.waitKey()
+
+exit()
+
+
+
 ######## GENERATE LEAFS ########
 leafs = []
 i = 0
 while len(leafs) < NPOINTS and i < NPOINTS*20:
+	## Generate random leaf somewhere in the tree
 	P = generatePoint(radius=300, sigma=40) + O
 
+	## Check if its not too close to another leaf
 	minDistance = 2 * R + mm(5)
 	if inPlane(P, R, WIDTH, HEIGHT):
 		distances = [distance(P, L) < minDistance for L in leafs]
@@ -91,12 +175,12 @@ img = np.ones((HEIGHT, WIDTH, 3))
 for leaf in leafs:
 	drawLeaf(img, leaf)
 
-paths = []
+edges = []
 
 # Generate Delaunay triangulation
 triangulation = bowyerWatson(leafs)
 
-### Remove all from triangulation whose center does not lie within another triangle ###
+### Remove all triangles from triangulation whose circumcentre does not lie within another triangle ###
 _triangulation = triangulation
 triangulation = []
 for T in _triangulation:
@@ -104,49 +188,49 @@ for T in _triangulation:
 		triangulation.append(T)
 ### Remove all from triangulation whose center does not lie within another triangle ###
 
-### Add all possible branches as paths ###
+### Add all possible branches as edges ###
 for T in triangulation:
 	for _T in triangulation:
 		if T.sharesVertexWith(_T):
-			# Prevent duplicate paths, since line A-B != line B-A
-			if (T.C, _T.C) not in paths and (_T.C, T.C) not in paths: 
-				paths.append((T.C, _T.C))
-print("%d voronoi paths added" % len(paths))
-### Add all possible branches as paths ###
+			# Prevent duplicate edges, since line A-B != line B-A
+			if (T.C, _T.C) not in edges and (_T.C, T.C) not in edges: 
+				edges.append((T.C, _T.C))
+print("%d voronoi edges added" % len(edges))
+### Add all possible branches as edges ###
 
-print("Drawing %d paths" % len(paths))
-for (v1, v2) in paths:
+print("Drawing %d edges" % len(edges))
+for (v1, v2) in edges:
 	cv2.line(img, toCV(v1), toCV(v2), (0, 0, 1), 14)
 
-### Add paths from leafs to branches ###
-print("\nAdd paths from leafs to branches")
+### Add edges from leafs to branches ###
+print("\nAdd edges from leafs to branches")
 leafPaths = []
 for L in leafs:
 	minDist, minProj, minLine = float("inf"), None, None
-	for P in paths: # Find path closest to leaf
+	for P in edges: # Find edge closest to leaf
 		V, W = P
 		proj = projectPointOntoSegment(L, V, W)
 		dist = distancePointToSegment(L, V, W)
 		if dist < minDist:
 			minDist, minProj, minLine = dist, proj, P
 	
-	## Split up path V-W into paths V-proj, proj-W
+	## Split up edge V-W into edges V-proj, proj-W
 	if minProj not in minLine:
-		paths.remove(minLine) 					# Remove original segment
-		paths.append((minLine[0], minProj))		# Add first subsegment
-		paths.append((minProj, minLine[1]))		# Add second subsegment
+		edges.remove(minLine) 					# Remove original segment
+		edges.append((minLine[0], minProj))		# Add first subsegment
+		edges.append((minProj, minLine[1]))		# Add second subsegment
 	leafPaths.append((L, minProj))			# Add line from leaf to segment
-paths += leafPaths
-### Add paths from leafs to branches ###
+edges += leafPaths
+### Add edges from leafs to branches ###
 
-### Add path from root node to closest voronoi node ###
+### Add edge from root node to closest voronoi node ###
 distances = [distance(rootNode, T.C) for T in triangulation]
 iClosest = distances.index(min(distances))
-paths.append((rootNode, triangulation[iClosest].C))
+edges.append((rootNode, triangulation[iClosest].C))
 
-## Draw all paths
-print("Drawing %d paths" % len(paths))
-for (v1, v2) in paths:
+## Draw all edges
+print("Drawing %d edges" % len(edges))
+for (v1, v2) in edges:
 	cv2.line(img, toCV(v1), toCV(v2), (np.random.rand(), np.random.rand(), np.random.rand()), 3)
 
 cv2.imshow("img", img)
@@ -159,32 +243,32 @@ cv2.waitKey()
 img = np.ones((HEIGHT, WIDTH, 3))
 
 # Get unique list of all nodes (leafs, voronoi, rootnode)
-nodes = list(set([val for sublist in paths for val in sublist]))
+nodes = list(set([val for sublist in edges for val in sublist]))
+# Get routes from all leafs to root node
+routes = dijkstra(list(nodes), list(edges), rootNode)
+## Filter out all unused edges
+edges = []
+for node in leafs:
+	## Create route for node
+	route = []
+	previous = node
+	while routes[previous] != None:
+		route.append(previous)
+		previous = routes[previous]
+	route.append(rootNode)
+
+	## Add each edge of route to edges
+	for i in range(len(route)-1):	
+		P = (route[i], route[i+1])
+		if P not in edges:
+			edges.append(P)
+
 
 for leaf in leafs:
 	drawLeaf(img, leaf)
-
-routes = dijkstra(list(nodes), list(paths), rootNode)
-
-paths = []
-for node in leafs:
-	## Create path for node
-	path = []
-	previous = node
-	while routes[previous] != None:
-		path.append(previous)
-		previous = routes[previous]
-	path.append(rootNode)
-
-	## Draw path
-	for i in range(len(path)-1):	
-		P = (path[i], path[i+1])
-		if P not in paths:
-			paths.append(P)
-
-for path in paths:
-	cv2.line(img, toCV(path[0]), toCV(path[1]), (0, 0, 0), mm(3))
-	cv2.line(img, toCV(path[0]), toCV(path[1]), (0, 0, 1), 1)
+for edge in edges:
+	cv2.line(img, toCV(edge[0]), toCV(edge[1]), (0, 0, 0), mm(3))
+	cv2.line(img, toCV(edge[0]), toCV(edge[1]), (0, 0, 1), 1)
 
 
 
@@ -208,10 +292,6 @@ cv2.waitKey()
 
 
 
-
-import numpy as np
-import scipy
-from scipy.special import comb
 
 def bernstein_poly(i, n, t):
     """
@@ -248,86 +328,42 @@ def bezier_curve(points, nTimes=1000):
 
     return xvals, yvals
 
+img = np.ones((HEIGHT, WIDTH, 3))
+for leaf in leafs:
+	drawLeaf(img, leaf)
 
-if __name__ == "__main__":
-	from matplotlib import pyplot as plt
-
+for N in nodes:
 	neighbours = []
-	N = None
-	while True:
-		N = nodes[int(np.random.rand() * len(nodes))]
-		print(N)
-		neighbours = [path for path in paths if N in path]
-		print(neighbours)
-		if 2 <= len(neighbours):
-			break
+	neighbours = [edge for edge in edges if N in edge]
+	if len(neighbours) < 2:
+		continue
+	print(len(neighbours))
 
-
-	p1 = otherCorner(neighbours[0], N)
-	p2 = otherCorner(neighbours[1], N)
+	perms = list(itertools.permutations(neighbours, 2))
 	
-	print(N, p1, p2)
+	for e1, e2 in perms:
+		p1 = otherCorner(e1, N)
+		p2 = otherCorner(e2, N)
 
-	cv2.circle(img, toCV(p1), 3, (1, 0, 0), -1)
-	cv2.circle(img, toCV(p2), 3, (1, 0, 0), -1)
-	cv2.circle(img, toCV(N), 3, (1, 0, 0), -1)
+		print(N, p1, p2)
 
-	nPoints = 3
-	points = [p1, N, p2]
-	xpoints = [p[0] for p in points]
-	ypoints = [p[1] for p in points]
+		# cv2.circle(img, toCV(p1), 5, (1, 0, 0), -1)
+		# cv2.circle(img, toCV(p2), 5, (1, 0, 0), -1)
+		# cv2.circle(img, toCV(N), 5, (1, 0, 0), -1)
 
-	xvals, yvals = bezier_curve(points, nTimes=1000)
+		nPoints = 3
+		points = [p1, N, p2]
+		xpoints = [p[0] for p in points]
+		ypoints = [p[1] for p in points]
 
-	z = zip(xvals, yvals)
-	for x, y in z:
-		# print(x, y)
-		img[int(y), int(x)] = (1, 0, 0)
-		# cv2.circle(img, (int(x), int(y)), 0, (1, 0, 0), -1)
-	cv2.imshow("img", img)
-	cv2.waitKey()
-	# print(xvals, yvals)
+		xvals, yvals = bezier_curve(points, nTimes=1000)
 
-	# plt.plot(xvals, yvals)
-	# plt.plot(xpoints, ypoints, "ro")
-	# for nr in range(len(points)):
-	#     plt.text(points[nr][0], points[nr][1], nr)
-
-	# plt.show()
-
-
-
-
-
-
-
-
-exit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		z = zip(xvals, yvals)
+		for x, y in z:
+			x, y = int(x), int(y)
+			try:
+				img[y-1:y+2, x-1:x+1] = (1, 0.5, 0)
+			except:
+				pass
+cv2.imshow("img", img)
+cv2.waitKey()

@@ -41,6 +41,14 @@ class Vector(object):
         if self.values[0]<0: return 360 - arg_in_deg
         else: return arg_in_deg
 
+    def angleWith(self, other):
+        dot = self.inner(other)
+        det = self.values[0] * other.values[1] - self.values[1] * other.values[0]
+        return math.atan2(dot, det)
+
+        # Cos(q) = (u . v) / (|u| * |v|)
+        # return math.acos( self.inner(other) / (self.norm() * other.norm()) )
+
     def normalize(self):
         """ Returns a normalized unit vector """
         norm = self.norm()

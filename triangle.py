@@ -27,6 +27,7 @@ class Triangle(object):
 		v1, v2, v3 = other.corners
 		return v1 in self.corners or v2 in self.corners or v3 in self.corners
 
+	# https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
 	def containsPoint(self, P):
 		(P0, P1, P2) = self.corners
 	#   A = 1/2 * (-p1.y * p2.x + p0.y * (-p1.x + p2.x) + p0.x * (p1.y - p2.y) + p1.x * p2.y);

@@ -2,7 +2,6 @@ import math
 from vector import Vector as Vec
 from functools import reduce
 
-
 def distance(v, w):
 	return (v - w).norm()
 
@@ -36,29 +35,21 @@ def lineLineIntersection(a1, b1, c1, a2, b2, c2):
 		return None
 	return Vec((b2*c1 - b1*c2)/determinant, (a1*c2 - a2*c1)/determinant)
 
-def distancePointToSegment(V, W, P):
+def distancePointToSegment(P, V, W):
+	proj = projectPointOntoSegment(P, V, W)
+	return distance(P, proj)
+
+def projectPointOntoSegment(P, V, W):
 	length = distance(V, W)
-	if length == 0:
-		return distance(V, P)
+	if V == W:
+		return V
 	# Find projection of p onto w, by first moving everything to (0, 0) (aka subtracting v)
 	f = ((P-V) * (W-V)) / ((W-V)*(W-V))
 	# Clamp projection between [0, 1]
 	t = max(0, min(f, 1))
 	# Calculate the projection
 	proj = V + t * (W-V)
+	return proj
 
-	return distance(P, proj)
-
-# https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
-# def pointInTriangle(P, T):
-# 	(P0, P1, P2) = T.corners
-# #   A = 1/2 * (-p1.y * p2.x + p0.y * (-p1.x + p2.x) + p0.x * (p1.y - p2.y) + p1.x * p2.y);
-# 	A = 0.5 * (-P1[1]* P2[0]+ P0[1]* (-P1[0]+ P2[0]) +P0[0]* (P1[1] -P2[1]) +P1[0]* P2[1])
-# #   sign = A < 0 ? -1 : 1;
-# 	sign = -1 if A < 0 else 1
-# #	s = (p0.y * p2.x - p0.x * p2.y + (p2.y - p0.y) * p.x + (p0.x - p2.x) * p.y) * sign;
-# 	s = (P0[1] *P2[0] -P0[0] *P2[1] +(P2[1] -P0[1]) *P[0] +(P0[0] -P2[0]) *P[1]) *sign
-# #   t = (p0.x * p1.y - p0.y * p1.x + (p0.y - p1.y) * p.x + (p1.x - p0.x) * p.y) * sign;
-# 	t = (P0[0] *P1[1] -P0[1] *P1[0] +(P0[1] -P1[1]) *P[0] +(P1[0] -P0[0]) *P[1]) *sign 
-# #   return s > 0 && t > 0 && (s + t) < 2 * A * sign;
-# 	return s >0 and t >0 and (s + t) < 2 * A * sign
+def otherCorner(edge, corner):
+	return edge[0] if corner == edge[1] else edge[1]

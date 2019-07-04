@@ -64,11 +64,10 @@ class Vector(object):
             return self.matrix_mult(matrix)
         
     def _rotate2D(self, theta):
-        """ Rotate this vector by theta in degrees.
+        """ Rotate this vector by theta in radians.
             
             Returns a new vector.
         """
-        theta = math.radians(theta)
         # Just applying the 2D rotation matrix
         dc, ds = math.cos(theta), math.sin(theta)
         x, y = self.values
@@ -137,7 +136,11 @@ class Vector(object):
         return self.values[key]
         
     def __repr__(self):
-        return str(self.values)
+        string = "("
+        string += ", ".join([str(int(v)) for v in self.values])
+        string += ")"
+        return string
+        # return str(self.values)
 
     def __eq__(self, other):
         if type(self) != type(other):
@@ -149,3 +152,6 @@ class Vector(object):
             if a != b:
                 return False
         return True
+
+    def __hash__(self):
+        return hash(self.values)

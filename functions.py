@@ -33,6 +33,8 @@ def distancePointToSegment(P, V, W):
 	return distance(P, proj)
 
 def projectPointOntoSegment(P, V, W):
+	### NOTE !! For some reason the projection in projectPointOntoSegment might be extremely 
+	### NOTE !! slightly off, probably due to float imprecision. Problem when t = 0 or t = 1
 	length = distance(V, W)
 	if V == W:
 		return V
@@ -42,6 +44,7 @@ def projectPointOntoSegment(P, V, W):
 	t = max(0, min(f, 1))
 	# Calculate the projection
 	proj = V + t * (W-V)
+	
 	return proj
 
 def otherCorner(edge, corner):

@@ -41,6 +41,11 @@ class Vector(object):
         if self.values[0]<0: return 360 - arg_in_deg
         else: return arg_in_deg
 
+    def polar(self):
+        r = self.norm()
+        q = math.atan2(self[0], self[1])
+        return Vector(r, q)
+
     def angleWith(self, other):
         dot = self.inner(other)
         det = self.values[0] * other.values[1] - self.values[1] * other.values[0]
@@ -145,7 +150,7 @@ class Vector(object):
         
     def __repr__(self):
         string = "("
-        string += ", ".join([str(int(v)) for v in self.values])
+        string += ", ".join(["%0.2f" % v for v in self.values])
         string += ")"
         return string
         # return str(self.values)

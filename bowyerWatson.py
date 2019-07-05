@@ -8,17 +8,16 @@ def bowyerWatson(points):
 	# print("Running bowyerWatson on %d points" % len(points))
 	triangulation = []
 	# must be large enough to completely contain all the points in pointList
-	megaTriangle = Triangle(Vec(-3000, -3000), Vec(3000, -3000), Vec(0, 3000))
+	P1 = Vec(-3000, -3000)
+	P2 = Vec(3000, -3000)
+	P3 = Vec(0, 3000)
+	megaTriangle = Triangle(P1, P2, P3)
 
 	triangulation.append(megaTriangle)
 	
 	# add all the points one at a time to the triangulation
 	for iP, P in enumerate(points): 
 		
-		if P not in points:
-			raise Exception("Error! P not in Points")
-			exit()
-
 		badTriangles = []
 		# first find all the triangles that are no longer valid due to the insertion
 		for iT, T in enumerate(triangulation):
@@ -37,7 +36,7 @@ def bowyerWatson(points):
 			triangulation.remove(T)
 		
 		# re-triangulate the polygonal hole
-		for (v1, v2) in polygon:
+		for v1, v2 in polygon:
 			triangulation.append(Triangle(P, v1, v2))
 	
 	# if triangle contains a vertex from original super-triangle

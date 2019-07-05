@@ -13,13 +13,6 @@ def lineFromPoints(P, Q):
 	b = Q[0] - P[0]
 	c = P[0]*Q[1] - Q[0]*P[1]
 
-	GCD = reduce(lambda x,y: math.gcd(x,y), [a, b, c])
-	while GCD != 1:
-		a = a // GCD
-		b = b // GCD
-		c = c // GCD
-		GCD = reduce(lambda x,y: math.gcd(x,y), [a, b, c])
-
 	return a, b, c
 
 def perpendicularBisectorFromLine(P, Q, a, b, c):

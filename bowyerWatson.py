@@ -5,7 +5,7 @@ from functions import distance
 ### Generate Delaunay triangulation ###
 def bowyerWatson(points):
 	# https://en.wikipedia.org/wiki/Bowyer%E2%80%93Watson_algorithm
-	print("Running bowyerWatson on %d points" % len(points))
+	# print("Running bowyerWatson on %d points" % len(points))
 	triangulation = []
 	# must be large enough to completely contain all the points in pointList
 	megaTriangle = Triangle(Vec(-3000, -3000), Vec(3000, -3000), Vec(0, 3000))
@@ -15,6 +15,10 @@ def bowyerWatson(points):
 	# add all the points one at a time to the triangulation
 	for iP, P in enumerate(points): 
 		
+		if P not in points:
+			raise Exception("Error! P not in Points")
+			exit()
+
 		badTriangles = []
 		# first find all the triangles that are no longer valid due to the insertion
 		for iT, T in enumerate(triangulation):

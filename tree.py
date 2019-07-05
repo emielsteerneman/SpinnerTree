@@ -64,7 +64,7 @@ def drawTriangle(img, T, colour=(0, 0, 0)):
 	cv2.line(img, toCV(T.v3), toCV(T.v1), colour, 1)
 
 O = np.array([WIDTH//2, HEIGHT - HEIGHT//5])
-rootNode = Vec(WIDTH//2, HEIGHT)
+rootNode = Vec(WIDTH//2, HEIGHT-1)
 cv2.circle(img, toCV(rootNode), 8, (1, 0, 1), -1)
 
 
@@ -86,67 +86,70 @@ E6 = (LC2,L3)
 leafs = [LC, L1, L2, L3, L4, LC2]
 edges = [E1, E2, E3, E4, E5, E6]
 
-def getPointsFromEdge(edge):
+def getPointsFromEdge(edge, dist):
 	V, W = edge
 	center = (V+W) * 0.5
-	p1 = (mm(5)*(V-W)*(1/(V-W).norm())).rotate(0.5*math.pi) + center
-	p2 = (mm(5)*(W-V)*(1/(W-V).norm())).rotate(0.5*math.pi) + center
+	p1 = (dist*(V-W)*(1/(V-W).norm())).rotate(0.5*math.pi) + center
+	p2 = (dist*(W-V)*(1/(W-V).norm())).rotate(0.5*math.pi) + center
 	return p1, p2
 
-def getPointsFromNode(edges, P):
+def getPointsFromNode(edges, P, dist, img):
 	neighbours = [otherCorner(edge, P) for edge in edges if P in edge] + [P]
 	triangulation = bowyerWatson(neighbours)
 	
+	for T in triangulation:
+		if P not in T.corners:
+			print("Dafuq???")
+			print(P, T)
+			print(P[0], P[1])
+			for Q in T.corners:
+				print(Q[0], Q[1])
+
+			exit()
+
 	points = []
 	for T in triangulation:
 		# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
+		print()
+		print(T, P)
+		print("%s == %s = %s, %s == %s = %s, %s == %s = %s" % (T.corners[0], P, T.corners[0] == P, T.corners[1], P, T.corners[1] == P, T.corners[2], P, T.corners[2] == P))
 		V, W = [c for c in T.corners if c != P]
 		a, b, c = (V-W).norm(), (P-V).norm(), (P-W).norm()
+		print(a, b, c, (b**2 + c**2 - a**2), (2 * b * c))
+		cosA = (b**2 + c**2 - a**2) / (2 * b * c)
+		if cosA < -1:
+			drawTriangle(img, T, (0, 0, 1))
+			cv2.circle(img, toCV(T.C), 8, (1, 0, 0), 4)
+			cv2.circle(img, toCV(T.C), T.R, (1, 0, 0), 2)
+			return []
 		angle = math.acos((b**2 + c**2 - a**2) / (2 * b * c))
 		Q = (V-P).rotate(angle/2)
-		Q = P + 1/Q.norm() * Q * mm(5)
+		Q = P + 1/Q.norm() * Q * dist
 		points.append(Q)
 	return points
 
-for leaf in leafs:
-	cv2.circle(img, toCV(leaf), R, (0.5, 1, 0), mm(2))
-for V, W in edges:
-	cv2.line(img, toCV(V), toCV(W), (1, 0.5, 0), mm(2))
+# for leaf in leafs:
+# 	cv2.circle(img, toCV(leaf), R, (0.5, 1, 0), mm(2))
+# for V, W in edges:
+# 	cv2.line(img, toCV(V), toCV(W), (1, 0.5, 0), mm(2))
 
-for edge in edges:
-	p1, p2 = getPointsFromEdge(edge)
-	cv2.circle(img, toCV(p1), 4, (0.5, 0.5, 1), -1)
-	cv2.circle(img, toCV(p2), 4, (0.5, 0.5, 1), -1)
+# for edge in edges:
+# 	p1, p2 = getPointsFromEdge(edge)
+# 	cv2.circle(img, toCV(p1), 4, (0.5, 0.5, 1), -1)
+# 	cv2.circle(img, toCV(p2), 4, (0.5, 0.5, 1), -1)
 
-for P in [LC, LC2]:
-	points = getPointsFromNode(edges, P)
-	for Q in points:
-		cv2.circle(img, toCV(Q), 4, (0.5, 0.5, 1), -1)
+# for P in [LC, LC2]:
+# 	points = getPointsFromNode(edges, P)
+# 	for Q in points:
+# 		cv2.circle(img, toCV(Q), 4, (0.5, 0.5, 1), -1)
 
-cv2.imshow("img", img)
-cv2.waitKey()
-exit()
+# cv2.imshow("img", img)
+# cv2.waitKey()
+# exit()
 
-
-perms = list(itertools.combinations(neighbourNodes, 2))
-print(len(perms))
-for V, W in perms:
-	angle = (V-LC).angleWith(W-LC) * (180 / math.pi)
-	C = (V + W) * 0.5
-	print(angle)
-	cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 1)
-	cv2.putText(img, "%0.2f" % angle, toCV(C), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0)
-
-# T = Triangle(L1, LC, L3)
-# drawTriangle(img, T)
-# px = (mm(5)*(T.C-LC)*(1/(T.C-LC).norm())) + LC
-# cv2.circle(img, toCV(px), 4, (0.5, 0.5, 1), -1)
-# cv2.line(img, toCV(LC), toCV(T.C), (0, 0.5, 1), 1)
-
-cv2.imshow("img", img)
-cv2.waitKey()
-
-exit()
+# cv2.imshow("img", img)
+# cv2.waitKey()
+# exit()
 
 
 
@@ -263,31 +266,41 @@ for node in leafs:
 		if P not in edges:
 			edges.append(P)
 
-
 for leaf in leafs:
 	drawLeaf(img, leaf)
 for edge in edges:
-	cv2.line(img, toCV(edge[0]), toCV(edge[1]), (0, 0, 0), mm(3))
-	cv2.line(img, toCV(edge[0]), toCV(edge[1]), (0, 0, 1), 1)
+	e1, e2 = toCV(edge[0]), toCV(edge[1])
+	cv2.line(img, e1, e2, (0, 0, 0), 1)
+	cv2.circle(img, e1, 2, (0, 0, 1), -1)
+	cv2.circle(img, e2, 2, (0, 0, 1), -1)
 
+lengths = [(V-W).norm() for V, W in edges]
+lengths.sort()
+print(lengths)
+
+for V, W in edges:
+	if (V-W).norm() < 10:
+		center = (V+W) * 0.5
+		cv2.circle(img, toCV(center), 14, (0, 0, 1), 3)
 
 
 cv2.imshow("img", img)
 cv2.waitKey()	
 
+for edge in edges:
+	p1, p2 = getPointsFromEdge(edge, mm(1))
+	cv2.circle(img, toCV(p1), 2, (0.5, 0, 1), -1)
+	cv2.circle(img, toCV(p2), 2, (0.5, 0, 1), -1)
 
-# cv2.imshow("img", img)
-# cv2.waitKey()	
+for node in nodes:
+	points = getPointsFromNode(edges, node, mm(2), img)
+	for Q in points:
+		cv2.circle(img, toCV(Q), 2, (0, 0.5, 1), -1)
 
+cv2.imshow("img", img)
+cv2.waitKey()	
 
-
-
-
-
-
-
-
-
+exit()
 
 
 

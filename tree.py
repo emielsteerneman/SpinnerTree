@@ -6,7 +6,7 @@ import itertools
 from functools import reduce
 from vector import Vector as Vec
 from triangle import Triangle
-from functions import lineFromPoints, perpendicularBisectorFromLine, lineLineIntersection, distance, toCV, distancePointToSegment, projectPointOntoSegment, otherCorner
+from functions import lineFromPoints, perpendicularBisectorFromLine, lineLineIntersection, distance, toCV, distancePointToSegment, projectPointOntoSegment, otherCorner, bernstein_poly, bezier_curve
 
 from dijkstra import dijkstra
 from bowyerWatson import bowyerWatson
@@ -16,12 +16,9 @@ def mm(mm):
 	# return int(mm * 5.5586) # configured for 15.6" 1920x1080
 	return int(mm * 3.6460) # configured for 23.8" 1920x1080
 
-NPLATES = 1
-SCALAR = 1 / math.sqrt(NPLATES)
-
-WIDTH = 1000
-HEIGHT = 600
-R = int(mm(5) * SCALAR)
+WIDTH = 10000
+HEIGHT = 6000
+R = int(mm(50))
 
 NPOINTS = 80
 img = np.ones((HEIGHT, WIDTH, 3))
@@ -70,27 +67,6 @@ O = np.array([WIDTH//2, HEIGHT - HEIGHT//5])
 rootNode = Vec(WIDTH//2, HEIGHT-1)
 cv2.circle(img, toCV(rootNode), 8, (1, 0, 1), -1)
 
-
-
-img = np.ones((HEIGHT, WIDTH, 3))
-LC = Vec(WIDTH//2, HEIGHT//2)
-
-L1 = Vec(WIDTH//2, HEIGHT//4)
-L2 = Vec(3*WIDTH//4, HEIGHT//4)
-L3 = Vec(WIDTH//3, 3*HEIGHT//4)
-L4 = Vec(2*WIDTH//3, 3*HEIGHT//4)
-L5 = Vec(WIDTH//2 + 150, HEIGHT//2)
-LC2= Vec(1*WIDTH//4, 2*HEIGHT//4)
-E1 = (LC, L1)
-E2 = (LC, L2)
-# E3 = (LC, L3)
-E4 = (LC, L4)
-E5 = (LC, L5)
-E6 = (LC2,L1)
-E7 = (LC2,L3)
-leafs = [LC, L1, L2, L3, L4, LC2]
-edges = [E1, E2, E4, E5, E6, E7]
-
 def getPointsFromEdge(edge, dist=10):
 	V, W = edge
 	center = (V+W) * 0.5
@@ -98,8 +74,8 @@ def getPointsFromEdge(edge, dist=10):
 	p2 = (dist*(W-V)*(1/(W-V).norm())).rotate(0.5*math.pi) + center
 	return p1, p2
 
-def getPointsFromNode(edges, P, dist, img):
-	print("\ngetPointsFromNode")
+def getConnectingPairsFromNode(edges, P):
+	# print("\ngetConnectingPairsFromNode")
 	# Retrieve all neighbouring points
 	neighbours = [otherCorner(edge, P) for edge in edges if P in edge]
 	# Convert all neighbours from cartesian to polar
@@ -110,7 +86,13 @@ def getPointsFromNode(edges, P, dist, img):
 	cartPolarPairs.sort(key=lambda x: x[1][1])
 	# Create neighbouring pairs [(cartesian, polar), (cartesian, polar)]
 	adjacentPairs = list(zip(cartPolarPairs, rotateList(cartPolarPairs, 1)))
-	
+
+	return adjacentPairs
+
+def getPointsFromNode(edges, P, dist, img):
+	print("\ngetPointsFromNode")
+	adjacentPairs = getConnectingPairsFromNode(edges, P)
+
 	# For each neighbouring pair, create triangle and calculate angle
 	triangles = []
 	for pair1, pair2 in adjacentPairs:
@@ -146,24 +128,40 @@ def getPointsFromNode(edges, P, dist, img):
 		points.append(Q)
 	return points
 
-for leaf in leafs:
-	cv2.circle(img, toCV(leaf), R, (0.5, 1, 0), mm(1))
-for V, W in edges:
-	cv2.line(img, toCV(V), toCV(W), (1, 0.5, 0), mm(1))
 
-for edge in edges:
-	p1, p2 = getPointsFromEdge(edge)
-	cv2.circle(img, toCV(p1), 4, (0.5, 0.5, 1), -1)
-	cv2.circle(img, toCV(p2), 4, (0.5, 0.5, 1), -1)
+# img = np.ones((HEIGHT, WIDTH, 3))
+# LC = Vec(WIDTH//2, HEIGHT//2)
 
-for P in [LC, LC2]:
-	points = getPointsFromNode(edges, P, R, img)
-	for Q in points:
-		cv2.circle(img, toCV(Q), 4, (1, 0, 0.5), -1)
+# L1 = Vec(WIDTH//2, HEIGHT//4)
+# L2 = Vec(3*WIDTH//4, HEIGHT//4)
+# L3 = Vec(WIDTH//3, 3*HEIGHT//4)
+# L4 = Vec(2*WIDTH//3, 3*HEIGHT//4)
+# L5 = Vec(WIDTH//2 + 150, HEIGHT//2)
+# LC2= Vec(1*WIDTH//4, 2*HEIGHT//4)
+# E1 = (LC, L1)
+# E2 = (LC, L2)
+# # E3 = (LC, L3)
+# E4 = (LC, L4)
+# E5 = (LC, L5)
+# E6 = (LC2,L1)
+# E7 = (LC2,L3)
+# leafs = [LC, L1, L2, L3, L4, LC2]
+# edges = [E1, E2, E4, E5, E6, E7]
 
-cv2.imshow("img", img)
-cv2.waitKey()
-exit()
+# for leaf in leafs:
+# 	cv2.circle(img, toCV(leaf), R, (0.5, 1, 0), mm(1))
+# for V, W in edges:
+# 	cv2.line(img, toCV(V), toCV(W), (1, 0.5, 0), mm(1))
+
+# for edge in edges:
+# 	p1, p2 = getPointsFromEdge(edge)
+# 	cv2.circle(img, toCV(p1), 4, (0.5, 0.5, 1), -1)
+# 	cv2.circle(img, toCV(p2), 4, (0.5, 0.5, 1), -1)
+
+# for P in [LC, LC2]:
+# 	points = getPointsFromNode(edges, P, R, img)
+# 	for Q in points:
+# 		cv2.circle(img, toCV(Q), 4, (1, 0, 0.5), -1)
 
 # cv2.imshow("img", img)
 # cv2.waitKey()
@@ -174,12 +172,12 @@ exit()
 ######## GENERATE LEAFS ########
 leafs = []
 i = 0
-while len(leafs) < NPOINTS and i < NPOINTS*20:
+while len(leafs) < NPOINTS and i < NPOINTS*200:
 	## Generate random leaf somewhere in the tree
-	P = generatePoint(radius=300, sigma=40) + O
+	P = generatePoint(radius=3000, sigma=400) + O
 
 	## Check if its not too close to another leaf
-	minDistance = 2 * R + mm(5)
+	minDistance = 4 * R
 	if inPlane(P, R, WIDTH, HEIGHT):
 		distances = [distance(P, L) < minDistance for L in leafs]
 		if not any(distances):
@@ -340,105 +338,138 @@ for V, W in edges:
 	cv2.circle(img, e1, 2, (0, 0, 1), -1)
 	cv2.circle(img, e2, 2, (0, 0, 1), -1)
 
-cv2.imshow("img", img)
-cv2.waitKey()	
+nodes = list(set([val for sublist in edges for val in sublist]))
+# cv2.imshow("img", img)
+# cv2.waitKey()	
 ######## EDGES FILTERED ########
 
+img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
+# for edge in edges:
+# 	p1, p2 = getPointsFromEdge(edge, mm(1))
+# 	cv2.circle(img, toCV(p1), 2, (0.5, 0, 1), -1)
+# 	cv2.circle(img, toCV(p2), 2, (0.5, 0, 1), -1)
 
-for edge in edges:
-	p1, p2 = getPointsFromEdge(edge, mm(1))
-	cv2.circle(img, toCV(p1), 2, (0.5, 0, 1), -1)
-	cv2.circle(img, toCV(p2), 2, (0.5, 0, 1), -1)
+# cv2.imshow("img", img)
+# cv2.waitKey()	
 
-cv2.imshow("img", img)
-cv2.waitKey()	
+# for node in nodes:
+# 	points = getPointsFromNode(edges, node, mm(2), img)
+# 	for Q in points:
+# 		cv2.circle(img, toCV(Q), 2, (0, 0.5, 1), -1)
 
-for node in nodes:
-	points = getPointsFromNode(edges, node, mm(2), img)
-	for Q in points:
-		cv2.circle(img, toCV(Q), 2, (0, 0.5, 1), -1)
+# cv2.imshow("img", img)
+# cv2.waitKey()	
 
-cv2.imshow("img", img)
-cv2.waitKey()	
-
-exit()
-
-
-
-
-
-def bernstein_poly(i, n, t):
-    """
-     The Bernstein polynomial of n, i as a function of t
-    """
-
-    return comb(n, i) * ( t**(n-i) ) * (1 - t)**i
-
-
-def bezier_curve(points, nTimes=1000):
-    """
-       Given a set of control points, return the
-       bezier curve defined by the control points.
-
-       points should be a list of lists, or list of tuples
-       such as [ [1,1], 
-                 [2,3], 
-                 [4,5], ..[Xn, Yn] ]
-        nTimes is the number of time steps, defaults to 1000
-
-        See http://processingjs.nihongoresources.com/bezierinfo/
-    """
-
-    nPoints = len(points)
-    xPoints = np.array([p[0] for p in points])
-    yPoints = np.array([p[1] for p in points])
-
-    t = np.linspace(0.0, 1.0, nTimes)
-
-    polynomial_array = np.array([ bernstein_poly(i, nPoints-1, t) for i in range(0, nPoints)   ])
-
-    xvals = np.dot(xPoints, polynomial_array)
-    yvals = np.dot(yPoints, polynomial_array)
-
-    return xvals, yvals
-
-img = np.ones((HEIGHT, WIDTH, 3))
-for leaf in leafs:
-	drawLeaf(img, leaf)
+leafs = []
+for N in nodes:
+	neighbours = [edge for edge in edges if N in edge]
+	if len(neighbours) == 1: # If node is a leaf
+		leafs.append(N)
 
 for N in nodes:
-	neighbours = []
-	neighbours = [edge for edge in edges if N in edge]
-	if len(neighbours) < 2:
+	if N in leafs:
 		continue
-	print(len(neighbours))
 
-	perms = list(itertools.permutations(neighbours, 2))
-	
-	for e1, e2 in perms:
-		p1 = otherCorner(e1, N)
-		p2 = otherCorner(e2, N)
+	pairs = getConnectingPairsFromNode(edges, N)
+	for (V, (r1, a1)), (W, (r2, a2)) in pairs:
 
-		print(N, p1, p2)
+		factor1 = 1 - ((N+V)*0.5 - rootNode).norm() / HEIGHT
+		factor2 = 1 - ((N+W)*0.5 - rootNode).norm() / HEIGHT
+		# factorN = (factor1 + factor2) / 2
+		factorN = max([factor1, factor2])
 
-		# cv2.circle(img, toCV(p1), 5, (1, 0, 0), -1)
-		# cv2.circle(img, toCV(p2), 5, (1, 0, 0), -1)
-		# cv2.circle(img, toCV(N), 5, (1, 0, 0), -1)
+		size1 = max([mm(15), mm(40)*factor1])
+		size2 = max([mm(15), mm(40)*factor2])
+		sizeN = max([mm(15), mm(40)*factorN])
 
-		nPoints = 3
-		points = [p1, N, p2]
-		xpoints = [p[0] for p in points]
-		ypoints = [p[1] for p in points]
+		# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
+		a, b, c = (V-W).norm(), (N-V).norm(), (N-W).norm()  # Get lengths of edges
+		cosA = (b**2 + c**2 - a**2) / (2 * b * c)			# No idea
+		if cosA < -1 or 1 < cosA:							# Sanity check
+			print("[getPointsFromNode] cosA out of range", cosA)
+			cosA = t = max(-1, min(cosA, 1))
+		angle = math.acos(cosA)								# Get angle between the two outgoing edges
+		
+		if a1-a2 < 0:
+			a1 += 2*math.pi
 
-		xvals, yvals = bezier_curve(points, nTimes=1000)
+		# Rotate the other way if pi < angle
+		if abs(a1-a2) < math.pi:
+			Q = (V-N).rotate(angle/2)
+		else:
+			Q = (V-N).rotate(math.pi - angle/2)
+		# scale Q to dist and add to N
+		Q = N + 1/Q.norm() * Q * sizeN	
+		
+		V1, V2 = getPointsFromEdge((N, V), size1)
+		W1, W2 = getPointsFromEdge((N, W), size2)
+		if V in leafs:
+			V1 = V - ((V-N) * (1/(V-N).norm()) * R).rotate(2*math.pi/20)
+			V2 = V - ((V-N) * (1/(V-N).norm()) * R).rotate(-2*math.pi/20)
 
+		if W in leafs:
+			W1 = W - ((W-N) * (1/(W-N).norm()) * R).rotate(2*math.pi/20)
+			W2 = W - ((W-N) * (1/(W-N).norm()) * R).rotate(-2*math.pi/20)
+
+		dV = [V1, V2][np.argmin([distance(Q,V1), distance(Q,V2)])]
+		dW = [W1, W2][np.argmin([distance(Q,W1), distance(Q,W2)])]
+
+		xvals, yvals = bezier_curve([dV, Q, dW], nTimes=10000)
 		z = zip(xvals, yvals)
 		for x, y in z:
-			x, y = int(x), int(y)
-			try:
-				img[y-1:y+2, x-1:x+1] = (1, 0.5, 0)
-			except:
-				pass
-cv2.imshow("img", img)
-cv2.waitKey()
+			img[int(y), int(x)] = (0, 0.5, 1)
+			# cv2.circle(img, (int(x), int(y)), 1, (0, 0.5, 1), -1)
+			# img[y-1:y+2, x-1:x+1] = (0, 0.5, 1)
+
+for N in leafs:
+	P, Q = [edge for edge in edges if N in edge][0]
+	V = P if N == Q else Q
+	angle = (V-N).polar()[1] * (180 / math.pi)
+
+	cv2.circle(img, toCV(N), mm(4), (1, 0, 0.5), 2, cv2.LINE_AA)
+	cv2.ellipse(img, toCV(N), (int(mm(9)), int(mm(9))), 0, 90-angle+15, 90-angle+360-15, (1, 0, 0.5), 2, cv2.LINE_AA)
+
+	cv2.circle(img, toCV(N), R - mm(10), (1, 0, 0.5), 1, cv2.LINE_AA)
+	cv2.ellipse(img, toCV(N), (int(R), int(R)), 0, 90-angle+15, 90-angle+360-15, (1, 0, 0.5), 1, cv2.LINE_AA)
+	# cv2.putText(img, "%0.2f" % angle, toCV(N), cv2.FONT_HERSHEY_SIMPLEX, 1, (1, 1, 1))
+
+for edge in edges:
+	if edge[0] in leafs or edge[1] in leafs:
+		continue
+
+	factor = 1 - ((edge[0] + edge[1])*0.5 - rootNode).norm() / HEIGHT
+	size = max([mm(15), mm(40)*factor])
+
+	V, W = getPointsFromEdge(edge, mm(12))
+	Vs, Ws = getPointsFromEdge(edge, size)
+	# cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 1)	
+	X = W-V
+	points = []
+	points.append(Vs)
+	points.append(V + X*0.33)
+	points.append(V + X*0.33)
+	points.append(V + X*0.33)
+
+	points.append(V + X.rotate(0.5*math.pi)*0.66)
+	points.append(V + X.rotate(0.5*math.pi)*0.66)
+	points.append(V + X.rotate(0.5*math.pi)*0.66)
+
+	points.append(W + X.rotate(0.5*math.pi)*0.66)
+	points.append(W + X.rotate(0.5*math.pi)*0.66)
+	points.append(W + X.rotate(0.5*math.pi)*0.66)
+
+	points.append(V + X*0.66)
+	points.append(V + X*0.66)
+	points.append(V + X*0.66)
+	points.append(Ws)
+
+	xvals, yvals = bezier_curve(points, nTimes=1000)
+	z = zip(xvals, yvals)
+	for x, y in z:
+		cv2.circle(img, (int(x), int(y)), 1, (0, 0.5, 1), -1)
+		# img[y, x] = (0, 0.5, 1)
+
+cv2.imwrite("/home/emiel/Desktop/img.png", img*255)
+# cv2.imshow("img", img)
+# cv2.waitKey()	

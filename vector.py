@@ -109,6 +109,10 @@ class Vector(object):
         """
         return sum(a * b for a, b in zip(self, other))
     
+    def cross(self, other):
+        if len(self) == 2 and len(other) == 2:
+            return self.values[0] * other.values[1] - self.values[1] * other.values[0]
+
     def __mul__(self, other):
         """ Returns the dot product of self and other if multiplied
             by another Vector.  If multiplied by an int or float,
@@ -124,7 +128,7 @@ class Vector(object):
         """ Called if 4*self for instance """
         return self.__mul__(other)
             
-    def __div__(self, other):
+    def __truediv__(self, other):
         if type(other) == type(1) or type(other) == type(1.0):
             divided = tuple( a / other for a in self )
             return Vector(*divided)

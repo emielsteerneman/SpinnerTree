@@ -39,15 +39,16 @@ def intersectionOfSegments(V, W):
 	# https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
 	p, r = V[0], V[1]-V[0]
 	q, s = W[0], W[1]-W[0]
-	
-	t = (q-p).cross(s) * 1/(r.cross(s))
-	u = (p-q).cross(r) * 1/(s.cross(r))
 
 	# If r × s = 0 then lines are either parallel or colinear
 	if abs(r.cross(s)) < 1e-3: # 1e-3 arbitrary
 		return None
 		# if abs((q-p).cross(r)) < 1e-3: # Colinear
 		# else:							 # Parallel
+	
+	t = (q-p).cross(s) * 1/(r.cross(s))
+	u = (p-q).cross(r) * 1/(s.cross(r))
+	
 	return p + t * r
 
 def projectPointOntoSegment(P, V, W):

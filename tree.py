@@ -18,11 +18,18 @@ def mm(mm):
 	# return int(mm * 5.5586) # configured for 15.6" 1920x1080
 	return int(mm * 3.6460) # configured for 23.8" 1920x1080
 
-WIDTH = 1000
-HEIGHT = 600
-R = int(mm(5))
-
 NPOINTS = 80
+WIDTH = 15000
+HEIGHT = 9000
+R = int(mm(50))
+
+BRANCH_MIN_WIDTH = R
+BRANCH_MAX_WIDTH = R*2
+LEAF_MIN_DISTANCE = 2 * R + 1.5 * BRANCH_MAX_WIDTH
+
+RADIUS = HEIGHT // 2
+SIGMA = HEIGHT/15
+
 img = np.ones((HEIGHT, WIDTH, 3))
 
 def rotateList(l, n):
@@ -51,7 +58,7 @@ def drawLeaf(img, vec):
 	cv2.circle(img, toCV(vec), R, (0, 0.5, 0), mm(1), cv2.LINE_AA)
 
 O = np.array([WIDTH//2, HEIGHT - HEIGHT//5])
-rootNode = Vec(WIDTH//2, HEIGHT-1)
+rootNode = Vec(WIDTH//2, HEIGHT-2*R)
 
 def getPointsFromEdge(edge, dist=10):
 	V, W = edge
@@ -113,17 +120,16 @@ def getPointsFromNode(edges, P, dist, img):
 		points.append(Q)
 	return points
 
-
-def getPointsFromPairs(N, P1, P2):
+def getPointsFromPairs(N, P1, P2, leafs, branchMin, branchMax):
 
 	(V, (r1, a1)), (W, (r2, a2)) = (P1, P2)
-
 
 	factorV = 1 - ((N+V)*0.5 - rootNode).norm() / (HEIGHT)
 	factorW = 1 - ((N+W)*0.5 - rootNode).norm() / (HEIGHT)
 
-	sizeV = max([mm(1), mm(3)*factorV])
-	sizeW = max([mm(1), mm(3)*factorW])
+	sizeV = max([0.5*branchMin, 0.5*branchMax*factorV])
+	sizeW = max([0.5*branchMin, 0.5*branchMax*factorW])
+	sizeN = (sizeV + sizeW) / 2
 
 	### Get the point for the center node N, inbetween edges V and W
 	# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
@@ -140,16 +146,31 @@ def getPointsFromPairs(N, P1, P2):
 	if math.pi < abs(a2-a1):
 		Q = (W-N).rotate(math.pi-angle/2)
 	# scale Q to dist and add to N
-	Q = N + 1/Q.norm() * Q * 5
+	Q = N + 1/Q.norm() * Q * sizeN
 
-	Vc = (V + N) * 0.5 # center of V
-	V1 = sizeV * ((V-N) / (V-N).norm()).rotate(0.5*math.pi) # Point on one side of V
-	V2 = sizeV * ((N-V) / (N-V).norm()).rotate(0.5*math.pi) # Point on other side of V
+	## Get two points next to V
+	Vc, V1, V2 = None, None, None
+	if V not in leafs:
+		Vc = (V + N) / 2 # center of V
+		V1 = sizeV * ((V-N) / (V-N).norm()).rotate(0.5*math.pi) # Point on one side of V
+		V2 = sizeV * ((N-V) / (N-V).norm()).rotate(0.5*math.pi) # Point on other side of V
+	else:
+		V1 = R * ((N-V) / (N-V).norm()).rotate(2*math.pi * 15/360)
+		V2 = R * ((N-V) / (N-V).norm()).rotate(2*math.pi *-15/360)
+		Vc = V
 
-	Wc = (W + N) * 0.5 # center of W
-	W1 = sizeW * ((W-N) / (W-N).norm()).rotate(0.5*math.pi) # Point on one side of W
-	W2 = sizeW * ((N-W) / (N-W).norm()).rotate(0.5*math.pi) # Point on other side of W
+	## Get two points next to W
+	Wc, W1, W2 = None, None, None
+	if W not in leafs:
+		Wc = (W + N) * 0.5 # center of W
+		W1 = sizeW * ((W-N) / (W-N).norm()).rotate(0.5*math.pi) # Point on one side of W
+		W2 = sizeW * ((N-W) / (N-W).norm()).rotate(0.5*math.pi) # Point on other side of W
+	else:
+		W1 = R * ((N-W) / (N-W).norm()).rotate(2*math.pi * 15/360)
+		W2 = R * ((N-W) / (N-W).norm()).rotate(2*math.pi *-15/360)
+		Wc = W
 
+	## Get the two points closest to Q
 	combs = [(V1, W1), (V1, W2), (V2, W1), (V2, W2)]
 	combs.sort(key=lambda E : distance(E[0] + Vc, Q) + distance(E[1] + Wc, Q))
 	
@@ -159,35 +180,64 @@ def getPointsFromPairs(N, P1, P2):
 	dW = (N + Wp, W + Wp)
 	I = intersectionOfSegments(dV, dW)
 
+	# img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
+	# if V in leafs:
+	# 	cv2.line(img, toCV(N), toCV(V), (0, 0, 1), 1)
+	# 	cv2.line(img, toCV(N), toCV(W), (0, 0, 1), 1)
+
+	# 	cv2.circle(img, toCV(V), 1, (1, 0, 0), 2)
+	# 	cv2.circle(img, toCV(V), R, (1, 0, 0), 1)
+	# 	cv2.circle(img, toCV(V+V1), 1, (0, 1, 0), 2)
+	# 	cv2.circle(img, toCV(V+V2), 1, (0, 1, 0), 2)
+
+	# 	cv2.line(img, toCV(dV[0]), toCV(dV[1]), (0, 1, 1), 1)
+	# 	cv2.line(img, toCV(dW[0]), toCV(dW[1]), (0, 1, 1), 1)
+
+		# cv2.imshow("img", img)
+		# cv2.waitKey()
+
 	if I is None:
+		# cv2.circle(img, toCV(Q), 1, (1, 1, 0), 1)
+		# cv2.circle(img, toCV(Vc+Vp), 1, (1, 1, 0), 1)
+		# cv2.circle(img, toCV(Wc+Wp), 1, (1, 1, 0), 1)
+		# cv2.imshow("img", img)
+		# cv2.waitKey()
 		return Vc+Vp, Q, Wc+Wp
 
+	# cv2.circle(img, toCV(I), 1, (1, 1, 0), -1)
+	# cv2.circle(img, toCV(Vc+Vp), 1, (1, 1, 0), 1)
+	# cv2.circle(img, toCV(Wc+Wp), 1, (1, 1, 0), 1)
+	# cv2.imshow("img", img)
+	# cv2.waitKey()
 	return Vc+Vp, I, Wc+Wp
 
-def drawTree(edges=None, nodes=None, triangles=None, triangleCenters=False, img=None):
+def drawTree(edges=None, nodes=None, triangles=None, triangleCenters=False, img=None, title="None"):
 	showImg = img == None
 	if img == None:
 		img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
 	if edges != None:
 		for V, W in edges:
-			cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 1, cv2.LINE_AA)
+			cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 5, cv2.LINE_AA)
 
 	if nodes != None:
 		for N in nodes:
-			cv2.circle(img, toCV(N), R, (1, 0, 0.5), 1, cv2.LINE_AA)
+			cv2.circle(img, toCV(N), R, (1, 0, 0.5), 5, cv2.LINE_AA)
 
 	if triangles != None:
 		for T in triangles:
-			cv2.line(img, toCV(T.v1), toCV(T.v2), (0.5, 1, 0), 1, cv2.LINE_AA)
-			cv2.line(img, toCV(T.v2), toCV(T.v3), (0.5, 1, 0), 1, cv2.LINE_AA)
-			cv2.line(img, toCV(T.v3), toCV(T.v1), (0.5, 1, 0), 1, cv2.LINE_AA)
+			cv2.line(img, toCV(T.v1), toCV(T.v2), (0.5, 1, 0), 5, cv2.LINE_AA)
+			cv2.line(img, toCV(T.v2), toCV(T.v3), (0.5, 1, 0), 5, cv2.LINE_AA)
+			cv2.line(img, toCV(T.v3), toCV(T.v1), (0.5, 1, 0), 5, cv2.LINE_AA)
 			if triangleCenters:
 				cv2.circle(img, toCV(T.C), 4, (1, 0.5, 0), -1, cv2.LINE_AA)
 
 	# if showImg:
 	# 	cv2.imshow("Tree", img)
 	# 	cv2.waitKey()
+
+	img = cv2.resize(img, (WIDTH//10, HEIGHT//10), cv2.INTER_LANCZOS4)
+	cv2.imwrite(title + ".png", img*255)
 
 	return img	
 
@@ -217,39 +267,18 @@ def drawTreeSVG(edges=None, nodes=None, triangles=None, triangleCenters=False):
 
 
 
-# S1 = (Vec(150, 0), Vec(100, 250))
-# S2 = (Vec(150, 300), Vec(300, 300))
-
-# img = np.ones((400, 400, 3)) * 0.1
-# cv2.line(img, toCV(S1[0]), toCV(S1[1]), (1, 1, 1), 1)
-# cv2.line(img, toCV(S2[0]), toCV(S2[1]), (1, 1, 1), 1)
-
-# Q = intersectionOfSegments(S1, S2)
-
-# cv2.circle(img, toCV(Q), 10, (0, 0, 1), 2)
-# cv2.imshow("img", img)
-# cv2.waitKey()
-
-# getPointsFromPairs(Q, S1, S2)
-
-# exit()
-
-
-
-
 ######## GENERATE LEAFS ########
 leafs = []
 i = 0
 while len(leafs) < NPOINTS and i < NPOINTS*200:
 	i += 1
 	# Generate random leaf somewhere in the tree
-	N = generatePoint(radius=HEIGHT/2, sigma=2*R) + O
+	N = generatePoint(radius=RADIUS, sigma=SIGMA) + O
 	# Check if point in plane
 	if not inPlane(N, R, WIDTH, HEIGHT):
 		continue
 	# Check if its not too close to another leaf
-	minDistance = 3 * R
-	distances = [distance(N, L) < minDistance for L in leafs]
+	distances = [distance(N, L) < LEAF_MIN_DISTANCE for L in leafs]
 	if not any(distances):
 		leafs.append(N)
 print("Generated %d/%d leafs" % (len(leafs), NPOINTS))
@@ -263,7 +292,7 @@ print("Minimal distance between leaves: %0.2f" % min(distances))
 
 
 
-drawTree(nodes=leafs)
+drawTree(nodes=leafs, title="A")
 
 
 
@@ -275,7 +304,7 @@ edges = []
 # Generate Delaunay triangulation
 triangulation = bowyerWatson(leafs)
 
-drawTree(nodes=leafs, triangles=triangulation, triangleCenters=True)
+drawTree(nodes=leafs, triangles=triangulation, triangleCenters=True, title="B")
 
 ### Remove all triangles from triangulation whose circumcentre does not lie within another triangle ###
 ### This is done to make sure that there will be no branches outside of the tree ###
@@ -286,7 +315,7 @@ for T in _triangulation:
 		triangulation.append(T)
 ### Remove all from triangulation whose center does not lie within another triangle ###
 
-drawTree(nodes=leafs, triangles=triangulation, triangleCenters=True)
+drawTree(nodes=leafs, triangles=triangulation, triangleCenters=True, title="C")
 
 ### Add all possible branches as edges ###
 for T in triangulation:
@@ -298,8 +327,8 @@ for T in triangulation:
 print("%d voronoi edges added" % len(edges))
 ### Add all possible branches as edges ###
 
-drawTree(edges=edges, nodes=leafs, triangles=triangulation, triangleCenters=True)
-drawTree(edges=edges, nodes=leafs)
+drawTree(edges=edges, nodes=leafs, triangles=triangulation, triangleCenters=True, title="D")
+drawTree(edges=edges, nodes=leafs, title="E")
 
 distances = [(V-W).norm() for V, W in edges]
 print("Minimal distance before branches: %0.2f" % min(distances))
@@ -334,7 +363,7 @@ for L in leafs:
 edges += branches
 ### Add edges from leafs to branches ###
 
-drawTree(edges=edges, nodes=leafs)
+drawTree(edges=edges, nodes=leafs, title="F")
 
 distances = [(V-W).norm() for V, W in edges]
 print("Minimal distance  after branches: %0.2f" % min(distances))
@@ -345,7 +374,7 @@ iClosest = distances.index(min(distances))
 leafs.append(rootNode)
 edges.append((rootNode, triangulation[iClosest].C))
 
-drawTree(edges=edges, nodes=leafs)
+drawTree(edges=edges, nodes=leafs, title="G")
 
 distances = [(V-W).norm() for V, W in edges]
 print("Minimal distance  after root: %0.2f" % min(distances))
@@ -354,7 +383,7 @@ print("Minimal distance  after root: %0.2f" % min(distances))
 edgesRemoved = 0
 for i, (V, W) in enumerate(edges):
 	# If edge is too small, replace all occurences of W with V and delete edge
-	if distance(V, W) < R:
+	if distance(V, W) < 1.5*R:
 		for j, (P, Q) in enumerate(edges):
 			if P == W:
 				edges[j] = (V, Q)
@@ -370,11 +399,10 @@ print("Minimal distance after replacing branches < %0.2f:" % R, min(distances))
 ######## PATHS GENERATED ########
 
 
-# drawTreeSVG(edges=edges, nodes=leafs)
-# exit()
 
 
-drawTree(edges=edges, nodes=leafs)
+
+drawTree(edges=edges, nodes=leafs, title="H")
 
 
 
@@ -405,7 +433,6 @@ for node in leafs:
 distances = [(V-W).norm() for V, W in edges]
 print("Minimal distance after filtering:", min(distances))
 
-
 nodes = list(set([val for sublist in edges for val in sublist]))
 ######## EDGES FILTERED ########
 
@@ -413,10 +440,32 @@ nodes = list(set([val for sublist in edges for val in sublist]))
 
 
 
-drawTree(edges=edges, nodes=leafs)
+drawTree(edges=edges, nodes=leafs, title="I")
 
 
 
+
+
+def generateThoseWeirdPuzzlePieces(V, W, direction):
+	E = W-V
+	dE = E/5
+	r90 = 0.5*math.pi
+
+	points = []
+	P = V
+
+	points.append(P); P += 2*dE;
+	points.append(P); P += 2*dE.rotate(r90)*direction;
+	points.append(P); P -= dE;
+	points.append(P); P += 2*dE.rotate(r90)*direction;
+	points.append(P); P += 3*dE;
+	points.append(P); P -= 2*dE.rotate(r90)*direction;
+	points.append(P); P -= dE;
+	points.append(P); P -= 2*dE.rotate(r90)*direction;
+	points.append(P); P += 2*dE;
+	points.append(P);
+
+	return points
 
 
 nodes.sort(key=lambda node : node.norm())
@@ -435,218 +484,129 @@ ctx.set_source_rgb(0.1, 0.1, 0.1)
 ctx.rectangle(0, 0, WIDTH, HEIGHT)
 ctx.fill()
 ctx.set_source_rgb(1, 1, 1)
-ctx.set_line_width(2)
+ctx.set_line_width(1)
+
+img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
 for NODE in nodes:
 
 	if NODE in leafs:
+		neighbour = [otherCorner(edge, NODE) for edge in edges if NODE in edge][0]
+		offsetCairo = -0.5*math.pi
+		offsetAngle = 2*math.pi*(15/360)
+		angle = (NODE - neighbour).polar()[1]
+
 		ctx.new_sub_path()
-		ctx.arc(NODE[0], NODE[1], R/2, 0, 2*math.pi)
+		ctx.arc(NODE[0], NODE[1], R, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+		
+		# Get points where circle of leaf begins and ends
+		V = Vec(0, -1).rotate(-angle - offsetAngle)
+		W = Vec(0, -1).rotate(-angle + offsetAngle)
+		# Generate weird puzzle piece thing for leaf
+		points = generateThoseWeirdPuzzlePieces(NODE + V*R, NODE + W*R, -1)
+		for i in range(len(points)-2):
+			p2, p3 = points[i+1], points[i+2]
+			pp = (p2 + p3) / 2 # Middle of next path
+			# Go to end of path if at last curve
+			if i == len(points)-3:
+				pp = p3 
+			ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
+
+		# ctx.close_path()
+		# ctx.stroke()
+		# ctx.new_sub_path()
+
+		thickness = mm(10)
+		outerR = R - thickness
+		innerR = mm(4) + thickness
+
+		ctx.move_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
+		ctx.arc(NODE[0], NODE[1], outerR, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+		# ctx.move_to([0], W[1])
+
+		# ctx.line_to(NODE[0] + V[0]-10, NODE[1] + V[1]-10)
+		ctx.line_to((NODE + V*outerR)[0], (NODE + V*outerR)[1])
+		ctx.arc_negative(NODE[0], NODE[1], innerR, offsetCairo-angle-offsetAngle, offsetCairo-angle+offsetAngle)
+
+		ctx.line_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
+
+		ctx.move_to(NODE[0]+mm(4), NODE[1])
+		ctx.arc(NODE[0], NODE[1], mm(4), 0,  2*math.pi)
+
+		ctx.close_path()
 		ctx.stroke()
+
 		continue
 
 	pairs = getConnectingPairsFromNode(edges, NODE)
 
+	## Draw lines
 	# for ((V, _), (W, _)) in pairs:
 	# 	ctx.new_sub_path()
 	# 	ctx.move_to(NODE[0], NODE[1])	
 	# 	ctx.line_to(V[0], V[1])
 	# 	ctx.close_path()
 
-	beginx, beginy = pairs[0][0][0]
-	beginx, beginy = (NODE[0]+beginx)/2, (NODE[1]+beginy)/2
+	beginX, beginY, isLeaf = None, None, None # Used to close the path at the end
 	ctx.new_sub_path()
-	ctx.move_to(beginx, beginy)
 	for iPair, (P1, P2) in enumerate(pairs):
-		((x1, y1), (r1, a1)), ((x2, y2), (r2, a2)) = (P1, P2)
+		V, W = P1[0], P2[0]
+		(dVx, dVy), (Qx, Qy), (dWx, dWy) = getPointsFromPairs(NODE, P1, P2, leafs, BRANCH_MIN_WIDTH, BRANCH_MAX_WIDTH)
 
-		points = getPointsFromPairs(NODE, P1, P2)
-		if points is None:
-			continue
-
-		(dVx, dVy), (Qx, Qy), (dWx, dWy) = points
-
-		x, y = (NODE[0]+x2)/2, (NODE[1]+y2)/2
-
-		# ctx.line_to(Q[0], Q[1])
 		if iPair == 0:
 			ctx.move_to(dVx, dVy)
+			beginX, beginY = dVx, dVy
+			isLeaf = V in leafs
 		else:
-			ctx.line_to(dVx, dVy)
+			x1, y1 = ctx.get_current_point()
+			x2, y2 = dVx, dVy
+			A, B = Vec(x1, y1), Vec(x2, y2)
+			
+			## Get direction of puzzle piece
+			direction = 1
+			if distance(rootNode, A) < distance(rootNode, B) or V in leafs:
+				direction = -1
+			## Generate puzzle piece points
+			points = generateThoseWeirdPuzzlePieces(A, B, direction)
+			
+			## Draw puzzle piece
+			for i in range(len(points)-2):
+				p2, p3 = points[i+1], points[i+2]
+				pp = (p2 + p3) / 2
+				if i == len(points)-3:
+					pp = p3
+				ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
+
+		# Draw curve from one edge of node to other
 		ctx.curve_to(Qx, Qy, Qx, Qy, dWx, dWy)
-		
 
-		# ctx.line_to(Qx, Qy)
-		# ctx.line_to(dWx, dWy)
+	## Draw last puzzle piece
+	x1, y1 = ctx.get_current_point()
+	x2, y2 = beginX, beginY
+	A, B = Vec(x1, y1), Vec(x2, y2)
+	
+	## Get direction of puzzle piece
+	direction = 1
+	if distance(rootNode, A) < distance(rootNode, B) or isLeaf:
+		direction = -1
+	## Generate puzzle piece points
+	points = generateThoseWeirdPuzzlePieces(A, B, direction)
+	
+	## Draw puzzle piece
+	for i in range(len(points)-2):
+		p2, p3 = points[i+1], points[i+2]
+		pp = (p2 + p3) / 2
+		if i == len(points)-3:
+			pp = p3
+		ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
 
-
-		# ctx.set_line_width(4)
-		# ctx.arc(NODE[0], NODE[1], 2, 0, 2*math.pi)
-		# ctx.stroke()		
-		# ctx.set_line_width(2)
-
+	ctx.stroke()
 	ctx.close_path()
-ctx.stroke()
 
 surface.write_to_png("after.png")
 
+# cv2.imshow("img", img)
+# cv2.waitKey()
 
 exit()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
-
-for N in nodes:
-	if N in leafs:
-		continue
-
-	pairs = getConnectingPairsFromNode(edges, N)
-	for (V, (r1, a1)), (W, (r2, a2)) in pairs:
-
-		factor1 = 1 - ((N+V)*0.5 - rootNode).norm() / (HEIGHT)
-		factor2 = 1 - ((N+W)*0.5 - rootNode).norm() / (HEIGHT)
-		factorN = max([factor1, factor2])
-
-		size1 = max([mm(1), mm(3)*factor1])
-		size2 = max([mm(1), mm(3)*factor2])
-		sizeN = max([mm(1), mm(3)*factorN])
-
-		### Get the point for the center node N, inbetween edges V and W
-		# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
-		a, b, c = (V-W).norm(), (N-V).norm(), (N-W).norm()  # Get lengths of edges
-		cosA = (b**2 + c**2 - a**2) / (2 * b * c)			# Get angle between V and W
-		cosA = max(-1, min(cosA, 1))						# Sanity check. Sometimes, cosA is equal to something like -1.0000000000000004
-		angle = math.acos(cosA)								# Get angle between the two edges
-
-		if a2-a1 < 0:
-			a2 += 2*math.pi
-
-		Q = (V-N).rotate(-angle/2)
-		# Rotate the other way if the two edges are concave (if pi < angle)
-		if math.pi < abs(a2-a1):
-			Q = (W-N).rotate(math.pi-angle/2)
-		# scale Q to dist and add to N
-		Q = N + 1/Q.norm() * Q * (sizeN)
-
-		V1, V2 = getPointsFromEdge((N, V), size1)
-		W1, W2 = getPointsFromEdge((N, W), size2)
-
-
-
-		if V in leafs:
-			V1 = V - ((V-N) * (1/(V-N).norm()) * R).rotate(2*math.pi/20)
-			V2 = V - ((V-N) * (1/(V-N).norm()) * R).rotate(-2*math.pi/20)
-
-		if W in leafs:
-			W1 = W - ((W-N) * (1/(W-N).norm()) * R).rotate(2*math.pi/20)
-			W2 = W - ((W-N) * (1/(W-N).norm()) * R).rotate(-2*math.pi/20)
-
-		dV = [V1, V2][np.argmin([distance(Q,V1), distance(Q,V2)])]
-		dW = [W1, W2][np.argmin([distance(Q,W1), distance(Q,W2)])]
-
-		xvals, yvals = bezier_curve([dV, Q, dW], nTimes=10000)
-		z = zip(xvals, yvals)
-		for x, y in z:
-			img[int(y), int(x)] = (0, 0.5, 1)
-			# cv2.circle(img, (int(x), int(y)), 1, (0, 0.5, 1), -1)
-			# img[y-1:y+2, x-1:x+1] = (0, 0.5, 1)
-
-for N in leafs:
-	P, Q = [edge for edge in edges if N in edge][0]
-	V = P if N == Q else Q
-	angle = (V-N).polar()[1] * (180 / math.pi)
-
-	cv2.circle(img, toCV(N), R, (1, 0, 0.5), 2, cv2.LINE_AA)
-	# cv2.ellipse(img, toCV(N), (int(mm(2)), int(mm(2))), 0, 90-angle+15, 90-angle+360-15, (1, 0, 0.5), 2, cv2.LINE_AA)
-
-	# cv2.circle(img, toCV(N), R - mm(0), (1, 0, 0.5), 1, cv2.LINE_AA)
-	# cv2.ellipse(img, toCV(N), (int(R), int(R)), 0, 90-angle+15, 90-angle+360-15, (1, 0, 0.5), 1, cv2.LINE_AA)
-	# cv2.putText(img, "%0.2f" % angle, toCV(N), cv2.FONT_HERSHEY_SIMPLEX, 1, (1, 1, 1))
-
-# for edge in edges:
-# 	if edge[0] in leafs or edge[1] in leafs:
-# 		continue
-
-# 	factor = 1 - ((edge[0] + edge[1])*0.5 - rootNode).norm() / HEIGHT
-# 	size = max([mm(3), mm(5)*factor])
-
-# 	V, W = getPointsFromEdge(edge, mm(3))
-# 	Vs, Ws = getPointsFromEdge(edge, size)
-# 	# cv2.line(img, toCV(V), toCV(W), (0, 0.5, 1), 1)	
-# 	X = W-V
-# 	points = []
-# 	points.append(Vs)
-# 	points.append(V + X*0.33)
-# 	points.append(V + X*0.33)
-# 	points.append(V + X*0.33)
-
-# 	points.append(V + X.rotate(0.5*math.pi)*0.66)
-# 	points.append(V + X.rotate(0.5*math.pi)*0.66)
-# 	points.append(V + X.rotate(0.5*math.pi)*0.66)
-
-# 	points.append(W + X.rotate(0.5*math.pi)*0.66)
-# 	points.append(W + X.rotate(0.5*math.pi)*0.66)
-# 	points.append(W + X.rotate(0.5*math.pi)*0.66)
-
-# 	points.append(V + X*0.66)
-# 	points.append(V + X*0.66)
-# 	points.append(V + X*0.66)
-# 	points.append(Ws)
-
-# 	xvals, yvals = bezier_curve(points, nTimes=1000)
-# 	z = zip(xvals, yvals)
-# 	for x, y in z:
-# 		# cv2.circle(img, (int(x), int(y)), 1, (0, 0.5, 1), -1)
-# 		img[int(y), int(x)] = (0, 0.5, 1)
-
-cv2.imwrite("before.png", img*255)
-# cv2.imshow("img", img)
-# cv2.waitKey()	

@@ -8,9 +8,9 @@ def bowyerWatson(points):
 	# print("Running bowyerWatson on %d points" % len(points))
 	triangulation = []
 	# must be large enough to completely contain all the points in pointList
-	P1 = Vec(-30000, -30000)
-	P2 = Vec(30000, -30000)
-	P3 = Vec(0, 30000)
+	P1 = Vec(-1e15, -1e15)
+	P2 = Vec(1e15, -1e15)
+	P3 = Vec(0, 1e15)
 	megaTriangle = Triangle(P1, P2, P3)
 
 	triangulation.append(megaTriangle)

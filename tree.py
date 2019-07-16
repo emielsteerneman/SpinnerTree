@@ -19,15 +19,15 @@ def mm(mm):
 	return int(mm * 3.6460) # configured for 23.8" 1920x1080
 
 NPOINTS = 80
-WIDTH = 15000
-HEIGHT = 9000
+WIDTH = 10000
+HEIGHT = 6000
 R = int(mm(50))
 
-BRANCH_MIN_WIDTH = R
-BRANCH_MAX_WIDTH = R*2
-LEAF_MIN_DISTANCE = 2 * R + 1.5 * BRANCH_MAX_WIDTH
+BRANCH_MIN_WIDTH = mm(20)
+BRANCH_MAX_WIDTH = mm(50)
+LEAF_MIN_DISTANCE = 2 * R + BRANCH_MIN_WIDTH
 
-RADIUS = HEIGHT // 2
+RADIUS = 0.7 * HEIGHT // 2
 SIGMA = HEIGHT/15
 
 img = np.ones((HEIGHT, WIDTH, 3))
@@ -80,45 +80,6 @@ def getConnectingPairsFromNode(edges, N):
 	adjacentPairs = list(zip(cartPolarPairs, rotateList(cartPolarPairs, -1)))
 
 	return adjacentPairs
-
-def getPointsFromNode(edges, P, dist, img):
-	print("\ngetPointsFromNode")
-	adjacentPairs = getConnectingPairsFromNode(edges, P)
-
-	# For each neighbouring pair, create triangle and calculate angle
-	triangles = []
-	for pair1, pair2 in adjacentPairs:
-		cart1, cart2 = pair1[0], pair2[0]
-		angle = pair1[1][1] - pair2[1][1]
-		if angle < 0:
-			angle += 2*math.pi
-		triangles.append((Triangle(P, cart1, cart2), angle))
-
-	points = []
-	for (T, angleT) in triangles:
-		# drawTriangle(img, T)
-		# for x in T.corners:
-		# 	cv2.circle(img, toCV(x), R, (0, 1, 0), mm(2))
-
-		# https://www.mathsisfun.com/algebra/trig-solving-sss-triangles.html
-		V, W = [c for c in T.corners if c != P]				# Get other corners
-		a, b, c = (V-W).norm(), (P-V).norm(), (P-W).norm()  # Get lengths of edges
-		cosA = (b**2 + c**2 - a**2) / (2 * b * c)			# No idea
-		if cosA < -1 or 1 < cosA:							# Sanity check
-			print("[getPointsFromNode] cosA out of range. Something is going wrong here..")
-			return []
-		angle = math.acos(cosA)								# Get angle between the two outgoing edges
-		
-		# Rotate the other way if pi < angle
-		if abs(angleT) < math.pi:							
-			Q = (V-P).rotate(angle/2)
-		else:
-			Q = (V-P).rotate(math.pi - angle/2)
-		# scale Q to dist and add to P	
-		Q = P + 1/Q.norm() * Q * dist
-		
-		points.append(Q)
-	return points
 
 def getPointsFromPairs(N, P1, P2, leafs, branchMin, branchMax):
 
@@ -497,13 +458,17 @@ for NODE in nodes:
 		angle = (NODE - neighbour).polar()[1]
 
 		ctx.new_sub_path()
-		ctx.arc(NODE[0], NODE[1], R, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+		# ctx.arc(NODE[0], NODE[1], R, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
 		
 		# Get points where circle of leaf begins and ends
 		V = Vec(0, -1).rotate(-angle - offsetAngle)
 		W = Vec(0, -1).rotate(-angle + offsetAngle)
+		
+		ctx.move_to((NODE+V*R)[0], (NODE+V*R)[1])
+
 		# Generate weird puzzle piece thing for leaf
 		points = generateThoseWeirdPuzzlePieces(NODE + V*R, NODE + W*R, -1)
+		# Draw weird puzzle piece thing
 		for i in range(len(points)-2):
 			p2, p3 = points[i+1], points[i+2]
 			pp = (p2 + p3) / 2 # Middle of next path
@@ -512,29 +477,43 @@ for NODE in nodes:
 				pp = p3 
 			ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
 
-		# ctx.close_path()
-		# ctx.stroke()
-		# ctx.new_sub_path()
+		offsetAngle = 2*math.pi*(30/360)
+		V = Vec(0, -1).rotate(-angle - offsetAngle)
+		W = Vec(0, -1).rotate(-angle + offsetAngle)
 
-		thickness = mm(10)
-		outerR = R - thickness
-		innerR = mm(4) + thickness
+		ctx.line_to((NODE+W*mm(10))[0], (NODE+W*mm(10))[1])
+		ctx.arc(NODE[0], NODE[1], mm(10), offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+		# ctx.line_to((NODE+V*mm(10))[0], (NODE+V*mm(10))[1])
+		ctx.close_path()
+		ctx.stroke()
 
-		ctx.move_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
-		ctx.arc(NODE[0], NODE[1], outerR, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+
+
+
+		ctx.new_sub_path()
+		ctx.arc(NODE[0], NODE[1], mm(40), 0, 2*math.pi)
+		ctx.close_path()
+		ctx.stroke()
+
+		# thickness = mm(10)
+		# outerR = R - thickness
+		# innerR = mm(4) + thickness
+
+		# ctx.move_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
+		# ctx.arc(NODE[0], NODE[1], outerR, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
 		# ctx.move_to([0], W[1])
 
 		# ctx.line_to(NODE[0] + V[0]-10, NODE[1] + V[1]-10)
-		ctx.line_to((NODE + V*outerR)[0], (NODE + V*outerR)[1])
-		ctx.arc_negative(NODE[0], NODE[1], innerR, offsetCairo-angle-offsetAngle, offsetCairo-angle+offsetAngle)
+		# ctx.line_to((NODE + V*outerR)[0], (NODE + V*outerR)[1])
+		# ctx.arc_negative(NODE[0], NODE[1], innerR, offsetCairo-angle-offsetAngle, offsetCairo-angle+offsetAngle)
 
-		ctx.line_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
+		# ctx.line_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
 
-		ctx.move_to(NODE[0]+mm(4), NODE[1])
-		ctx.arc(NODE[0], NODE[1], mm(4), 0,  2*math.pi)
+		# ctx.move_to(NODE[0]+mm(4), NODE[1])
+		# ctx.arc(NODE[0], NODE[1], mm(4), 0,  2*math.pi)
 
-		ctx.close_path()
-		ctx.stroke()
+		# ctx.close_path()
+		# ctx.stroke()
 
 		continue
 

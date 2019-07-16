@@ -15,19 +15,21 @@ import cairo
 
 # 90mm = 500px -> 1mm = 5.5px
 def mm(mm):
-	# return int(mm * 5.5586) # configured for 15.6" 1920x1080
-	return int(mm * 3.6460) # configured for 23.8" 1920x1080
+	return mm
+	# return mm * 5.5586 # configured for 15.6" 1920x1080
+	# return mm * 3.6460 # configured for 23.8" 1920x1080
 
 NPOINTS = 80
-WIDTH = 10000
-HEIGHT = 6000
-R = int(mm(50))
+WIDTH = 4*1000
+HEIGHT = 4*600
+R = mm(50)
 
+BRANCH_MIN_LENGTH = 1.5*R
 BRANCH_MIN_WIDTH = mm(20)
 BRANCH_MAX_WIDTH = mm(50)
-LEAF_MIN_DISTANCE = 2 * R + BRANCH_MIN_WIDTH
+LEAF_MIN_DISTANCE = 2.5 * R + BRANCH_MIN_WIDTH
 
-RADIUS = 0.7 * HEIGHT // 2
+RADIUS = 0.8 * HEIGHT // 2
 SIGMA = HEIGHT/15
 
 img = np.ones((HEIGHT, WIDTH, 3))
@@ -208,7 +210,7 @@ def drawTreeSVG(edges=None, nodes=None, triangles=None, triangleCenters=False):
 	ctx = cairo.Context(surface)
 
 	if edges != None:
-		ctx.set_line_width(1)
+		ctx.set_line_width(3)
 		for (x1,y1), (x2, y2) in edges:
 			ctx.new_sub_path()
 			ctx.move_to(x1, y1)
@@ -216,7 +218,7 @@ def drawTreeSVG(edges=None, nodes=None, triangles=None, triangleCenters=False):
 			ctx.stroke()
 
 	if nodes != None:
-		ctx.set_line_width(1)
+		ctx.set_line_width(3)
 		for x,y in nodes:
 			ctx.new_sub_path()
 			ctx.arc(x, y, R, 0, 2*math.pi)
@@ -340,11 +342,11 @@ drawTree(edges=edges, nodes=leafs, title="G")
 distances = [(V-W).norm() for V, W in edges]
 print("Minimal distance  after root: %0.2f" % min(distances))
 
-## Replace all branches smaller than R
+## Replace all branches smaller than BRANCH_MIN_LENGTH
 edgesRemoved = 0
 for i, (V, W) in enumerate(edges):
 	# If edge is too small, replace all occurences of W with V and delete edge
-	if distance(V, W) < 1.5*R:
+	if distance(V, W) < BRANCH_MIN_LENGTH:
 		for j, (P, Q) in enumerate(edges):
 			if P == W:
 				edges[j] = (V, Q)
@@ -445,7 +447,7 @@ ctx.set_source_rgb(0.1, 0.1, 0.1)
 ctx.rectangle(0, 0, WIDTH, HEIGHT)
 ctx.fill()
 ctx.set_source_rgb(1, 1, 1)
-ctx.set_line_width(1)
+ctx.set_line_width(3)
 
 img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 

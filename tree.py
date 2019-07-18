@@ -447,7 +447,7 @@ ctx.set_source_rgb(0.1, 0.1, 0.1)
 ctx.rectangle(0, 0, WIDTH, HEIGHT)
 ctx.fill()
 ctx.set_source_rgb(1, 1, 1)
-ctx.set_line_width(3)
+ctx.set_line_width(1)
 
 img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
@@ -480,22 +480,27 @@ for NODE in nodes:
 			ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
 
 		offsetAngle = 2*math.pi*(30/360)
-		V = Vec(0, -1).rotate(-angle - offsetAngle)
+		# V = Vec(0, -1).rotate(-angle - offsetAngle)
 		W = Vec(0, -1).rotate(-angle + offsetAngle)
 
-		ctx.line_to((NODE+W*mm(10))[0], (NODE+W*mm(10))[1])
-		ctx.arc(NODE[0], NODE[1], mm(10), offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
-		# ctx.line_to((NODE+V*mm(10))[0], (NODE+V*mm(10))[1])
+		ctx.line_to((NODE+W*mm(20))[0], (NODE+W*mm(20))[1])
+		ctx.arc(NODE[0], NODE[1], mm(20), offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+		ctx.line_to((NODE+V*R)[0], (NODE+V*R)[1])
+		
+		V = Vec(0, mm(4)).rotate(offsetCairo) + NODE
+		ctx.move_to(V[0], V[1])
+		ctx.arc(NODE[0], NODE[1], mm(4), 0, 2*math.pi)
+
 		ctx.close_path()
 		ctx.stroke()
 
 
 
 
-		ctx.new_sub_path()
-		ctx.arc(NODE[0], NODE[1], mm(40), 0, 2*math.pi)
-		ctx.close_path()
-		ctx.stroke()
+		# ctx.new_sub_path()
+		# ctx.arc(NODE[0], NODE[1], mm(40), 0, 2*math.pi)
+		# ctx.close_path()
+		# ctx.stroke()
 
 		# thickness = mm(10)
 		# outerR = R - thickness

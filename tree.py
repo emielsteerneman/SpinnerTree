@@ -19,12 +19,12 @@ def mm(mm):
 	# return mm * 5.5586 # configured for 15.6" 1920x1080
 	# return mm * 3.6460 # configured for 23.8" 1920x1080
 
-NPOINTS = 80
+NPOINTS = 70
 WIDTH = 4*1000
 HEIGHT = 4*600
 R = mm(50)
 
-BRANCH_MIN_LENGTH = 1.5*R
+BRANCH_MIN_LENGTH = R
 BRANCH_MIN_WIDTH = mm(20)
 BRANCH_MAX_WIDTH = mm(50)
 LEAF_MIN_DISTANCE = 2.5 * R + BRANCH_MIN_WIDTH
@@ -55,9 +55,6 @@ def generatePoint(radius=200, mu=0, sigma=25):
 
 def inPlane(P, r, w, h):
 	return 0 < P[0]-r and 0 < P[1]-r and P[0]+r < w and P[1]+r < h
-
-def drawLeaf(img, vec):
-	cv2.circle(img, toCV(vec), R, (0, 0.5, 0), mm(1), cv2.LINE_AA)
 
 O = np.array([WIDTH//2, HEIGHT - HEIGHT//5])
 rootNode = Vec(WIDTH//2, HEIGHT-2*R)
@@ -199,8 +196,8 @@ def drawTree(edges=None, nodes=None, triangles=None, triangleCenters=False, img=
 	# 	cv2.imshow("Tree", img)
 	# 	cv2.waitKey()
 
-	img = cv2.resize(img, (WIDTH//10, HEIGHT//10), cv2.INTER_LANCZOS4)
-	cv2.imwrite(title + ".png", img*255)
+	img = cv2.resize(img, (WIDTH//1, HEIGHT//1), cv2.INTER_LANCZOS4)
+	cv2.imwrite("images/" + title + ".png", img*255)
 
 	return img	
 
@@ -225,6 +222,135 @@ def drawTreeSVG(edges=None, nodes=None, triangles=None, triangleCenters=False):
 			ctx.stroke()
 
 	surface.write_to_png("example.png")
+
+def generateThoseWeirdPuzzlePieces(V, W, direction):
+	E = W-V
+	dE = E/5
+	r90 = 0.5*math.pi
+
+	points = []
+	P = V
+
+	points.append(P); P += 2*dE;
+	points.append(P); P += 2*dE.rotate(r90)*direction;
+	points.append(P); P -= dE;
+	points.append(P); P += 2*dE.rotate(r90)*direction;
+	points.append(P); P += 3*dE;
+	points.append(P); P -= 2*dE.rotate(r90)*direction;
+	points.append(P); P -= dE;
+	points.append(P); P -= 2*dE.rotate(r90)*direction;
+	points.append(P); P += 2*dE;
+	points.append(P);
+
+	return points
+
+def makeVectorId(V):
+	id = ""
+	id += ("%d" % int(V[0]))[-2:]
+	id += ("%d" % int(V[1]))[-2:]
+	return id
+
+def drawLeaf(leaf, edges, ctx, outerRadius=mm(20), axisRadius=mm(4), R=mm(50)):
+	neighbour = [otherCorner(edge, leaf) for edge in edges if leaf in edge][0]
+	offsetCairo = -0.5*math.pi
+	angle = (leaf - neighbour).polar()[1]
+		
+	# 15 degrees offset between outer intersection points
+	offsetAngle = 2*math.pi*(15/360)	
+	# Get points where circle of leaf begins and ends
+	V = Vec(0, -1).rotate(-angle - offsetAngle)
+	W = Vec(0, -1).rotate(-angle + offsetAngle)
+	
+	# Generate weird puzzle piece thing for leaf
+	points = generateThoseWeirdPuzzlePieces(leaf + V*R, leaf + W*R, 1)
+
+	ctx.set_source_rgb(1, 1, 1)
+	ctx.set_font_size(4)
+	ctx.new_sub_path()
+	# Move to starting point
+	ctx.move_to((leaf+V*R)[0], (leaf+V*R)[1])
+	
+	# Draw weird puzzle piece thing
+	for i in range(len(points)-2):
+		p2, p3 = points[i+1], points[i+2]
+		pp = (p2 + p3) / 2 # Middle of next path
+		# Go to end of path if at last curve
+		if i == len(points)-3:
+			pp = p3 
+		ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
+
+
+	# 15 degrees offset between inner intersection points
+	offsetAngle = 2*math.pi*(80/360)
+	# V = Vec(0, -1).rotate(-angle - offsetAngle)
+	W = Vec(0, -1).rotate(-angle + offsetAngle)
+
+	# Line from end of puzzle piece to beginning of circle
+	ctx.line_to((leaf+W*outerRadius)[0], (leaf+W*mm(20))[1])
+	# Circle
+	ctx.arc(leaf[0], leaf[1], outerRadius, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
+	# Line back from end of circle to beginning of puzzle piece
+	ctx.line_to((leaf+V*R)[0], (leaf+V*R)[1])
+	
+	### Draw hole for shaft / axis, 4mm
+	V = Vec(0, axisRadius).rotate(offsetCairo) + leaf
+	ctx.move_to(V[0], V[1])
+	ctx.arc(leaf[0], leaf[1], axisRadius, 0, 2*math.pi)
+
+	Ptext = leaf + Vec(0, 10)
+	ctx.move_to(Ptext[0], Ptext[1])
+	ctx.show_text(makeVectorId(leaf))
+
+	Ptext = leaf + (neighbour - leaf).normalize() * 15
+	ctx.move_to(Ptext[0], Ptext[1])
+	ctx.show_text(makeVectorId(neighbour))
+
+	ctx.close_path()
+	ctx.stroke()
+
+
+### TEST ###
+def testAxisRadius():
+	surface = cairo.SVGSurface("test.svg", 200, 25)
+	surface.set_document_unit(cairo.SVG_UNIT_MM)
+	ctx = cairo.Context(surface)
+	ctx.set_line_width(0.05)
+
+	ctx.new_sub_path()
+	ctx.set_source_rgb(1, 0, 0)
+	ctx.set_source_rgb(1, 0, 0)
+	ctx.rectangle(0, 0, 200, 25)
+	ctx.stroke()
+	ctx.close_path()
+	# ctx.fill()
+
+	ctx.set_font_size(4)
+
+	radii = np.linspace(3, 4, num=11)
+	for dx, r in enumerate(radii):
+		x, y = 20 + 15*dx, 10
+		ctx.new_sub_path()
+
+		ctx.set_source_rgb(1, 0, 0)
+		ctx.move_to(x, y)
+		ctx.arc(x-r, y, r, 0, 2*math.pi)
+		ctx.stroke()
+
+		ctx.set_source_rgb(0, 0, 0)
+		ctx.move_to(x-2*r, y+10)
+		ctx.show_text("%0.2f" % (2*r))
+		ctx.stroke()
+
+		ctx.close_path()
+
+	ctx.move_to(80, 4)
+	ctx.show_text("<-- 200mm -->")
+	ctx.stroke()
+		
+	exit()
+
+# testAxisRadius()
+############
 
 
 
@@ -346,6 +472,8 @@ print("Minimal distance  after root: %0.2f" % min(distances))
 edgesRemoved = 0
 for i, (V, W) in enumerate(edges):
 	# If edge is too small, replace all occurences of W with V and delete edge
+	if V in leafs or W in leafs:
+		continue
 	if distance(V, W) < BRANCH_MIN_LENGTH:
 		for j, (P, Q) in enumerate(edges):
 			if P == W:
@@ -358,7 +486,7 @@ edges = [edge for edge in edges if distance(edge[0], edge[1]) != 0]
 print("Edges removed:", edgesRemoved)
 
 distances = [(V-W).norm() for V, W in edges]
-print("Minimal distance after replacing branches < %0.2f:" % R, min(distances))
+print("Minimal distance after replacing branches < %0.2f:" % BRANCH_MIN_LENGTH, min(distances))
 ######## PATHS GENERATED ########
 
 
@@ -409,28 +537,6 @@ drawTree(edges=edges, nodes=leafs, title="I")
 
 
 
-def generateThoseWeirdPuzzlePieces(V, W, direction):
-	E = W-V
-	dE = E/5
-	r90 = 0.5*math.pi
-
-	points = []
-	P = V
-
-	points.append(P); P += 2*dE;
-	points.append(P); P += 2*dE.rotate(r90)*direction;
-	points.append(P); P -= dE;
-	points.append(P); P += 2*dE.rotate(r90)*direction;
-	points.append(P); P += 3*dE;
-	points.append(P); P -= 2*dE.rotate(r90)*direction;
-	points.append(P); P -= dE;
-	points.append(P); P -= 2*dE.rotate(r90)*direction;
-	points.append(P); P += 2*dE;
-	points.append(P);
-
-	return points
-
-
 nodes.sort(key=lambda node : node.norm())
 
 leafs = []
@@ -441,6 +547,7 @@ for N in nodes:
 
 
 surface = cairo.SVGSurface("after.svg", WIDTH, HEIGHT)
+surface.set_document_unit(cairo.SVG_UNIT_MM)
 ctx = cairo.Context(surface)
 
 ctx.set_source_rgb(0.1, 0.1, 0.1)
@@ -451,77 +558,13 @@ ctx.set_line_width(1)
 
 img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
+nLeafsDrawn = 0
+
 for NODE in nodes:
-
+	
 	if NODE in leafs:
-		neighbour = [otherCorner(edge, NODE) for edge in edges if NODE in edge][0]
-		offsetCairo = -0.5*math.pi
-		offsetAngle = 2*math.pi*(15/360)
-		angle = (NODE - neighbour).polar()[1]
-
-		ctx.new_sub_path()
-		# ctx.arc(NODE[0], NODE[1], R, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
-		
-		# Get points where circle of leaf begins and ends
-		V = Vec(0, -1).rotate(-angle - offsetAngle)
-		W = Vec(0, -1).rotate(-angle + offsetAngle)
-		
-		ctx.move_to((NODE+V*R)[0], (NODE+V*R)[1])
-
-		# Generate weird puzzle piece thing for leaf
-		points = generateThoseWeirdPuzzlePieces(NODE + V*R, NODE + W*R, -1)
-		# Draw weird puzzle piece thing
-		for i in range(len(points)-2):
-			p2, p3 = points[i+1], points[i+2]
-			pp = (p2 + p3) / 2 # Middle of next path
-			# Go to end of path if at last curve
-			if i == len(points)-3:
-				pp = p3 
-			ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
-
-		offsetAngle = 2*math.pi*(30/360)
-		# V = Vec(0, -1).rotate(-angle - offsetAngle)
-		W = Vec(0, -1).rotate(-angle + offsetAngle)
-
-		ctx.line_to((NODE+W*mm(20))[0], (NODE+W*mm(20))[1])
-		ctx.arc(NODE[0], NODE[1], mm(20), offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
-		ctx.line_to((NODE+V*R)[0], (NODE+V*R)[1])
-		
-		V = Vec(0, mm(4)).rotate(offsetCairo) + NODE
-		ctx.move_to(V[0], V[1])
-		ctx.arc(NODE[0], NODE[1], mm(4), 0, 2*math.pi)
-
-		ctx.close_path()
-		ctx.stroke()
-
-
-
-
-		# ctx.new_sub_path()
-		# ctx.arc(NODE[0], NODE[1], mm(40), 0, 2*math.pi)
-		# ctx.close_path()
-		# ctx.stroke()
-
-		# thickness = mm(10)
-		# outerR = R - thickness
-		# innerR = mm(4) + thickness
-
-		# ctx.move_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
-		# ctx.arc(NODE[0], NODE[1], outerR, offsetCairo-angle+offsetAngle, offsetCairo-angle-offsetAngle)
-		# ctx.move_to([0], W[1])
-
-		# ctx.line_to(NODE[0] + V[0]-10, NODE[1] + V[1]-10)
-		# ctx.line_to((NODE + V*outerR)[0], (NODE + V*outerR)[1])
-		# ctx.arc_negative(NODE[0], NODE[1], innerR, offsetCairo-angle-offsetAngle, offsetCairo-angle+offsetAngle)
-
-		# ctx.line_to((NODE + W*outerR)[0], (NODE + W*outerR)[1])
-
-		# ctx.move_to(NODE[0]+mm(4), NODE[1])
-		# ctx.arc(NODE[0], NODE[1], mm(4), 0,  2*math.pi)
-
-		# ctx.close_path()
-		# ctx.stroke()
-
+		drawLeaf(NODE, edges, ctx)
+		nLeafsDrawn += 1
 		continue
 
 	pairs = getConnectingPairsFromNode(edges, NODE)
@@ -534,6 +577,7 @@ for NODE in nodes:
 	# 	ctx.close_path()
 
 	beginX, beginY, isLeaf = None, None, None # Used to close the path at the end
+	ctx.set_source_rgb(1, 1, 1)
 	ctx.new_sub_path()
 	for iPair, (P1, P2) in enumerate(pairs):
 		V, W = P1[0], P2[0]
@@ -549,9 +593,9 @@ for NODE in nodes:
 			A, B = Vec(x1, y1), Vec(x2, y2)
 			
 			## Get direction of puzzle piece
-			direction = 1
+			direction = -1
 			if distance(rootNode, A) < distance(rootNode, B) or V in leafs:
-				direction = -1
+				direction = 1
 			## Generate puzzle piece points
 			points = generateThoseWeirdPuzzlePieces(A, B, direction)
 			
@@ -571,10 +615,10 @@ for NODE in nodes:
 	x2, y2 = beginX, beginY
 	A, B = Vec(x1, y1), Vec(x2, y2)
 	
-	## Get direction of puzzle piece
-	direction = 1
+	## Get direction of puzzle piece. Always point away from leaf
+	direction = -1
 	if distance(rootNode, A) < distance(rootNode, B) or isLeaf:
-		direction = -1
+		direction = 1
 	## Generate puzzle piece points
 	points = generateThoseWeirdPuzzlePieces(A, B, direction)
 	
@@ -586,8 +630,20 @@ for NODE in nodes:
 			pp = p3
 		ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
 
+	ctx.move_to(NODE[0], NODE[1])
+	ctx.show_text(makeVectorId(NODE))
+
+	## Add connecting numbers to puzzle piece
+	for iPair, (P1, P2) in enumerate(pairs):
+		V, W = P1[0], P2[0]
+		Ptext = NODE + (V - NODE).normalize() * 15
+		ctx.move_to(Ptext[0], Ptext[1])
+		ctx.show_text(makeVectorId(V))
+
 	ctx.stroke()
 	ctx.close_path()
+
+print("Leafs drawn : %d" % nLeafsDrawn)
 
 surface.write_to_png("after.png")
 

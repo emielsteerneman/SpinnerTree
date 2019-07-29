@@ -19,18 +19,19 @@ def mm(mm):
 	# return mm * 5.5586 # configured for 15.6" 1920x1080
 	# return mm * 3.6460 # configured for 23.8" 1920x1080
 
-NPOINTS = 70
+NPOINTS = 69
 WIDTH = 4*1000
 HEIGHT = 4*600
 R = mm(50)
+R_AXIS_LASER = mm(3.90)
 
 BRANCH_MIN_LENGTH = R
 BRANCH_MIN_WIDTH = mm(20)
 BRANCH_MAX_WIDTH = mm(50)
 LEAF_MIN_DISTANCE = 2.5 * R + BRANCH_MIN_WIDTH
 
-RADIUS = 0.8 * HEIGHT // 2
-SIGMA = HEIGHT/15
+RADIUS = 0.7 * HEIGHT // 2
+SIGMA = HEIGHT/20
 
 img = np.ones((HEIGHT, WIDTH, 3))
 
@@ -196,7 +197,7 @@ def drawTree(edges=None, nodes=None, triangles=None, triangleCenters=False, img=
 	# 	cv2.imshow("Tree", img)
 	# 	cv2.waitKey()
 
-	img = cv2.resize(img, (WIDTH//1, HEIGHT//1), cv2.INTER_LANCZOS4)
+	# img = cv2.resize(img, (WIDTH//1, HEIGHT//1), cv2.INTER_LANCZOS4)
 	cv2.imwrite("images/" + title + ".png", img*255)
 
 	return img	
@@ -264,8 +265,9 @@ def drawLeaf(leaf, edges, ctx, outerRadius=mm(20), axisRadius=mm(4), R=mm(50)):
 	# Generate weird puzzle piece thing for leaf
 	points = generateThoseWeirdPuzzlePieces(leaf + V*R, leaf + W*R, 1)
 
-	ctx.set_source_rgb(1, 1, 1)
-	ctx.set_font_size(4)
+	ctx.set_source_rgb(1, 0, 0)
+	ctx.set_line_width(0.05)
+	
 	ctx.new_sub_path()
 	# Move to starting point
 	ctx.move_to((leaf+V*R)[0], (leaf+V*R)[1])
@@ -292,10 +294,18 @@ def drawLeaf(leaf, edges, ctx, outerRadius=mm(20), axisRadius=mm(4), R=mm(50)):
 	# Line back from end of circle to beginning of puzzle piece
 	ctx.line_to((leaf+V*R)[0], (leaf+V*R)[1])
 	
-	### Draw hole for shaft / axis, 4mm
+	### Draw hole for shaft / axis, 3.9mm
 	V = Vec(0, axisRadius).rotate(offsetCairo) + leaf
 	ctx.move_to(V[0], V[1])
 	ctx.arc(leaf[0], leaf[1], axisRadius, 0, 2*math.pi)
+
+	ctx.stroke()
+	ctx.close_path()
+
+	## Draw id and connecting id
+	ctx.set_source_rgb(0, 0, 0)
+	ctx.set_line_width(1)
+	ctx.set_font_size(4)
 
 	Ptext = leaf + Vec(0, 10)
 	ctx.move_to(Ptext[0], Ptext[1])
@@ -305,7 +315,6 @@ def drawLeaf(leaf, edges, ctx, outerRadius=mm(20), axisRadius=mm(4), R=mm(50)):
 	ctx.move_to(Ptext[0], Ptext[1])
 	ctx.show_text(makeVectorId(neighbour))
 
-	ctx.close_path()
 	ctx.stroke()
 
 
@@ -317,7 +326,6 @@ def testAxisRadius():
 	ctx.set_line_width(0.05)
 
 	ctx.new_sub_path()
-	ctx.set_source_rgb(1, 0, 0)
 	ctx.set_source_rgb(1, 0, 0)
 	ctx.rectangle(0, 0, 200, 25)
 	ctx.stroke()
@@ -338,7 +346,7 @@ def testAxisRadius():
 
 		ctx.set_source_rgb(0, 0, 0)
 		ctx.move_to(x-2*r, y+10)
-		ctx.show_text("%0.2f" % (2*r))
+		ctx.show_text("r=%0.2f" % (r))
 		ctx.stroke()
 
 		ctx.close_path()
@@ -351,7 +359,6 @@ def testAxisRadius():
 
 # testAxisRadius()
 ############
-
 
 
 
@@ -550,20 +557,20 @@ surface = cairo.SVGSurface("after.svg", WIDTH, HEIGHT)
 surface.set_document_unit(cairo.SVG_UNIT_MM)
 ctx = cairo.Context(surface)
 
-ctx.set_source_rgb(0.1, 0.1, 0.1)
-ctx.rectangle(0, 0, WIDTH, HEIGHT)
-ctx.fill()
-ctx.set_source_rgb(1, 1, 1)
-ctx.set_line_width(1)
+# ctx.set_source_rgb(0.2, 0.2, 0.2)
+# ctx.rectangle(0, 0, WIDTH, HEIGHT)
+# ctx.fill()
+
+# ctx.set_source_rgb(1, 1, 1)
+# ctx.set_line_width(1)
 
 img = np.ones((HEIGHT, WIDTH, 3)) * 0.1
 
 nLeafsDrawn = 0
 
 for NODE in nodes:
-	
 	if NODE in leafs:
-		drawLeaf(NODE, edges, ctx)
+		drawLeaf(NODE, edges, ctx, axisRadius=R_AXIS_LASER)
 		nLeafsDrawn += 1
 		continue
 
@@ -577,7 +584,9 @@ for NODE in nodes:
 	# 	ctx.close_path()
 
 	beginX, beginY, isLeaf = None, None, None # Used to close the path at the end
-	ctx.set_source_rgb(1, 1, 1)
+	
+	ctx.set_source_rgb(1, 0, 0)
+	ctx.set_line_width(0.05)
 	ctx.new_sub_path()
 	for iPair, (P1, P2) in enumerate(pairs):
 		V, W = P1[0], P2[0]
@@ -629,7 +638,16 @@ for NODE in nodes:
 		if i == len(points)-3:
 			pp = p3
 		ctx.curve_to(p2[0], p2[1], p2[0], p2[1], pp[0], pp[1])
+	ctx.close_path()
+	ctx.stroke()
 
+	
+
+	ctx.set_source_rgb(0, 0, 0)
+	ctx.set_line_width(1)
+	ctx.set_font_size(4)
+	
+	ctx.new_sub_path()
 	ctx.move_to(NODE[0], NODE[1])
 	ctx.show_text(makeVectorId(NODE))
 
@@ -644,7 +662,7 @@ for NODE in nodes:
 	ctx.close_path()
 
 print("Leafs drawn : %d" % nLeafsDrawn)
-
+print("Number of segments : %d" % len(nodes))
 surface.write_to_png("after.png")
 
 # cv2.imshow("img", img)
